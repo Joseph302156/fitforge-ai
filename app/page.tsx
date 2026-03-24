@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const dayColors = {
   Monday:    { bg: "bg-indigo-50",  text: "text-indigo-700",  badge: "MON" },
@@ -20,6 +20,15 @@ const hints = [
   "Night shift worker",
   "Lower back pain",
   "Weekends only",
+];
+
+const chatSuggestions = [
+  "Make Monday easier",
+  "Add more cardio",
+  "I only have 20 min per day",
+  "Make it harder overall",
+  "Remove all leg exercises",
+  "Add a rest day on Wednesday",
 ];
 
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
@@ -182,6 +191,215 @@ function DayCard({ day, onEdit }) {
   );
 }
 
+// ─── AI Chat Box ──────────────────────────────────────────────────────────────
+function ChatBox({ plan, goal, level, onPlanUpdate }) {
+  const [messages, setMessages] = useState([
+    {
+      role: "assistant",
+      text: "Hey! I'm your AI trainer. Ask me anything about your plan — I can adjust workouts, swap exercises, add rest days, or rebuild around any restrictions you have.",
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, open]);
+
+  async function sendMessage(text) {
+    const userText = text || input.trim();
+    if (!userText || loading) return;
+    setInput("");
+    setLoading(true);
+
+    const newMessages = [...messages, { role: "user", text: userText }];
+    setMessages(newMessages);
+
+    const planSummary = plan.days
+      .map(d => d.type === "rest"
+        ? `${d.day}: Rest day`
+        : `${d.day}: ${d.name} (${d.duration}) — ${d.exercises?.join(", ")}`)
+      .join("\n");
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          goal,
+          level,
+          planSummary,
+          messages: newMessages.map(m => ({
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: m.text,
+          })),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.updatedPlan) {
+        onPlanUpdate(data.updatedPlan);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          text: data.message || "I've updated your plan based on your feedback!",
+          planUpdated: true,
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          text: data.message || "Let me know if you'd like any changes to your plan!",
+        }]);
+      }
+    } catch {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        text: "Sorry, something went wrong. Please try again.",
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-4">
+      {/* Toggle button */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 rounded-2xl border transition-all"
+        style={{
+          background: open ? "#1a1a2e" : "white",
+          borderColor: open ? "#1a1a2e" : "#e5e7eb",
+        }}>
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <span className="text-xs font-medium" style={{ color: open ? "white" : "#374151" }}>
+            Ask your AI trainer
+          </span>
+          {messages.length > 1 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+              style={{ background: open ? "rgba(255,255,255,0.15)" : "#eef2ff", color: open ? "white" : "#4f46e5" }}>
+              {messages.length - 1}
+            </span>
+          )}
+        </div>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={open ? "white" : "#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {/* Chat panel */}
+      {open && (
+        <div className="mt-2 border border-gray-100 rounded-2xl overflow-hidden bg-white"
+          style={{ animation: "fadeUp 0.2s ease forwards" }}>
+
+          {/* Messages */}
+          <div className="flex flex-col gap-3 p-4 overflow-y-auto" style={{ maxHeight: "260px" }}>
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                {msg.role === "assistant" && (
+                  <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 mr-2 mt-0.5">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                  </div>
+                )}
+                <div className="flex flex-col gap-1 max-w-[80%]">
+                  <div
+                    className="text-xs leading-relaxed px-3 py-2 rounded-2xl"
+                    style={{
+                      background: msg.role === "user" ? "#1a1a2e" : "#f3f4f6",
+                      color: msg.role === "user" ? "white" : "#374151",
+                      borderBottomRightRadius: msg.role === "user" ? "4px" : "16px",
+                      borderBottomLeftRadius: msg.role === "assistant" ? "4px" : "16px",
+                    }}>
+                    {msg.text}
+                  </div>
+                  {msg.planUpdated && (
+                    <span className="text-[10px] text-green-500 font-medium px-1">
+                      ✓ Plan updated above
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {loading && (
+              <div className="flex justify-start">
+                <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 mr-2">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
+                </div>
+                <div className="px-3 py-2 rounded-2xl bg-gray-100" style={{ borderBottomLeftRadius: "4px" }}>
+                  <div className="flex gap-1 items-center h-4">
+                    <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" style={{ animation: "bounce 1s infinite 0s" }}/>
+                    <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" style={{ animation: "bounce 1s infinite 0.2s" }}/>
+                    <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" style={{ animation: "bounce 1s infinite 0.4s" }}/>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Quick suggestions */}
+          {messages.length === 1 && (
+            <div className="px-4 pb-3 flex gap-2 flex-wrap">
+              {chatSuggestions.map(s => (
+                <button key={s} onClick={() => sendMessage(s)}
+                  className="text-[10px] px-2.5 py-1 rounded-lg border border-gray-200 bg-gray-50 text-gray-500 hover:border-indigo-300 hover:text-indigo-500 transition-all">
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Input bar */}
+          <div className="flex items-center gap-2 px-3 py-3 border-t border-gray-100">
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+              placeholder="Ask anything about your plan..."
+              className="flex-1 text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-gray-700 outline-none focus:border-indigo-400 transition-colors"
+              disabled={loading}
+            />
+            <button
+              onClick={() => sendMessage()}
+              disabled={!input.trim() || loading}
+              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
+              style={{
+                background: input.trim() && !loading ? "#4f46e5" : "#f3f4f6",
+              }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                stroke={input.trim() && !loading ? "white" : "#9ca3af"}
+                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function Home() {
   const [goal, setGoal] = useState("Lose weight");
@@ -230,6 +448,12 @@ export default function Home() {
     setTimeout(() => setSavedMessage(false), 2500);
   }
 
+  function handlePlanUpdate(newPlan) {
+    setPlan(newPlan);
+    setSavedMessage(true);
+    setTimeout(() => setSavedMessage(false), 2500);
+  }
+
   return (
     <>
       <style>{`
@@ -245,10 +469,9 @@ export default function Home() {
 
       <main className="min-h-screen flex items-center justify-center p-4" style={{ background: "#f3f4f6" }}>
         <div className="w-full max-w-sm">
-
           <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100">
 
-            {/* Dark navy header */}
+            {/* Header */}
             <div className="px-5 py-6" style={{ background: "#1a1a2e" }}>
               <h1 className="text-white text-lg font-medium">
                 {plan ? "Your weekly plan" : "Build your week"}
@@ -270,9 +493,7 @@ export default function Home() {
                     {goals.map(g => (
                       <button key={g} onClick={() => setGoal(g)}
                         className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                          goal === g
-                            ? "text-white border-[#1a1a2e]"
-                            : "border-gray-200 text-gray-500 hover:border-gray-400"
+                          goal === g ? "text-white border-[#1a1a2e]" : "border-gray-200 text-gray-500 hover:border-gray-400"
                         }`}
                         style={goal === g ? { background: "#1a1a2e" } : {}}>
                         {g}
@@ -285,9 +506,7 @@ export default function Home() {
                     {levels.map(l => (
                       <button key={l} onClick={() => setLevel(l)}
                         className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                          level === l
-                            ? "text-white border-[#1a1a2e]"
-                            : "border-gray-200 text-gray-500 hover:border-gray-400"
+                          level === l ? "text-white border-[#1a1a2e]" : "border-gray-200 text-gray-500 hover:border-gray-400"
                         }`}
                         style={level === l ? { background: "#1a1a2e" } : {}}>
                         {l}
@@ -301,7 +520,6 @@ export default function Home() {
                     <p className="text-xs font-medium text-gray-700">Tell the AI your situation</p>
                     <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">AI</span>
                   </div>
-
                   <textarea
                     value={userPrompt}
                     onChange={e => setUserPrompt(e.target.value)}
@@ -346,7 +564,7 @@ export default function Home() {
                 <>
                   {savedMessage && (
                     <div className="mb-3 bg-green-50 border border-green-100 rounded-xl px-4 py-2.5 text-xs text-green-600 text-center font-medium fade-up">
-                      Day updated successfully!
+                      Plan updated!
                     </div>
                   )}
 
@@ -365,10 +583,18 @@ export default function Home() {
                     ))}
                   </div>
 
+                  {/* AI Chat Box */}
+                  <ChatBox
+                    plan={plan}
+                    goal={goal}
+                    level={level}
+                    onPlanUpdate={handlePlanUpdate}
+                  />
+
                   <button
                     onClick={() => { setPlan(null); setError(null); setUserPrompt(""); }}
-                    className="w-full mt-4 border border-gray-200 text-gray-400 text-xs py-2.5 rounded-xl hover:border-gray-300 transition-colors">
-                    ← Rebuild my plan
+                    className="w-full mt-3 border border-gray-200 text-gray-400 text-xs py-2.5 rounded-xl hover:border-gray-300 transition-colors">
+                    ← Start over
                   </button>
                 </>
               )}
