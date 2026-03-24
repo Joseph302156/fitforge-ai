@@ -1,8 +1,8 @@
-import dynamic from "next/dynamic";
-
-const WorkoutTab = dynamic(() => import("./components/WorkoutTab"), { ssr: false });
-const CalendarTab = dynamic(() => import("./components/CalendarTab"), { ssr: false });
-const NutritionTab = dynamic(() => import("./components/NutritionTab"), { ssr: false });
+"use client";
+import { useState } from "react";
+import WorkoutTab from "./components/WorkoutTab";
+import CalendarTab from "./components/CalendarTab";
+import NutritionTab from "./components/NutritionTab";
 
 const tabs = [
   {
