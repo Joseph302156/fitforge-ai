@@ -27,49 +27,33 @@ const CHAT_SUGGESTIONS = [
 type Day = { day: string; type: string; name: string; duration?: string; exercises?: string[] };
 type Plan = { days: Day[]; tip?: string };
 
-// ── Week key utility ──────────────────────────────────────────────────────────
-// Returns a string like "2026-W12" for the current ISO week
+function localDateStr(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+}
+
 function getWeekKey(): string {
   const now = new Date();
   const jan4 = new Date(now.getFullYear(), 0, 4);
   const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
   const weekNum = Math.ceil((dayOfYear + jan4.getDay()) / 7);
-  return `${now.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
-}
-
-function loadPlanFromStorage(): Plan | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem("fitforge_plan");
-    if (!raw) return null;
-    const { weekKey, plan } = JSON.parse(raw);
-    if (weekKey !== getWeekKey()) {
-      localStorage.removeItem("fitforge_plan");
-      return null;
-    }
-    return plan;
-  } catch {
-    return null;
-  }
+  return `${now.getFullYear()}-W${String(weekNum).padStart(2,"0")}`;
 }
 
 function savePlanToStorage(plan: Plan) {
-  if (typeof window === "undefined") return;
   localStorage.setItem("fitforge_plan", JSON.stringify({ weekKey: getWeekKey(), plan }));
 }
 
 function clearPlanFromStorage() {
-  if (typeof window === "undefined") return;
   localStorage.removeItem("fitforge_plan");
 }
 
-// ── WorkoutSession ────────────────────────────────────────────────────────────
+// ── WorkoutSession ─────────────────────────────────────────────────────────────
 function WorkoutSession({ day, onClose, onDone }: {
   day: Day;
   onClose: () => void;
   onDone: (name: string, dur: string, count: number, secs: number) => void;
 }) {
-  const c = DAY_COLORS[day.day] || { bg: "#f9fafb", text: "#6b7280", badge: "DAY", accent: "#6366f1" };
+  const c = DAY_COLORS[day.day] || { bg:"#f9fafb", text:"#6b7280", badge:"DAY", accent:"#6366f1" };
   const [started, setStarted] = useState(false);
   const [secs, setSecs] = useState(0);
   const [checked, setChecked] = useState<boolean[]>(Array(day.exercises?.length || 0).fill(false));
@@ -78,34 +62,20 @@ function WorkoutSession({ day, onClose, onDone }: {
   const completed = checked.filter(Boolean).length;
   const allDone = completed === checked.length && checked.length > 0;
 
-  useEffect(() => {
-    if (allDone && started && !done) setTimeout(finish, 600);
-  }, [checked]);
+  useEffect(() => { if (allDone && started && !done) setTimeout(finish, 600); }, [checked]);
+  useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
 
-  useEffect(() => {
-    return () => { if (timer.current) clearInterval(timer.current); };
-  }, []);
-
-  function start() {
-    setStarted(true);
-    timer.current = setInterval(() => setSecs(s => s + 1), 1000);
-  }
-
+  function start() { setStarted(true); timer.current = setInterval(() => setSecs(s => s + 1), 1000); }
   function finish() {
     if (timer.current) clearInterval(timer.current);
     setDone(true);
     onDone(day.name, day.duration || "", day.exercises?.length || 0, secs);
   }
-
-  function toggle(i: number) {
-    if (!started || done) return;
-    setChecked(p => { const u = [...p]; u[i] = !u[i]; return u; });
-  }
-
+  function toggle(i: number) { if (!started || done) return; setChecked(p => { const u = [...p]; u[i] = !u[i]; return u; }); }
   function fmt(s: number) {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60;
-    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sc).padStart(2, "0")}`;
-    return `${String(m).padStart(2, "0")}:${String(sc).padStart(2, "0")}`;
+    if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`;
+    return `${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`;
   }
 
   return (
@@ -131,7 +101,7 @@ function WorkoutSession({ day, onClose, onDone }: {
           {started && !done && (
             <>
               <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:"99px", height:"6px", overflow:"hidden", marginTop:"8px" }}>
-                <div style={{ height:"100%", borderRadius:"99px", background:c.accent, width:`${(completed / checked.length) * 100}%`, transition:"width 0.5s" }} />
+                <div style={{ height:"100%", borderRadius:"99px", background:c.accent, width:`${(completed/checked.length)*100}%`, transition:"width 0.5s" }} />
               </div>
               <p style={{ color:"rgba(255,255,255,0.35)", fontSize:"10px", textAlign:"center", margin:"6px 0 0" }}>{completed} of {checked.length} done</p>
             </>
@@ -177,7 +147,7 @@ function WorkoutSession({ day, onClose, onDone }: {
   );
 }
 
-// ── EditModal ─────────────────────────────────────────────────────────────────
+// ── EditModal ──────────────────────────────────────────────────────────────────
 function EditModal({ day, onSave, onClose }: { day: Day; onSave: (d: Day) => void; onClose: () => void }) {
   const [name, setName] = useState(day.name);
   const [duration, setDuration] = useState(day.duration || "");
@@ -231,8 +201,10 @@ function EditModal({ day, onSave, onClose }: { day: Day; onSave: (d: Day) => voi
   );
 }
 
-// ── DayCard ───────────────────────────────────────────────────────────────────
-function DayCard({ day, onEdit, onStart }: { day: Day; onEdit: (d: Day) => void; onStart: (d: Day) => void }) {
+// ── DayCard ────────────────────────────────────────────────────────────────────
+function DayCard({ day, onEdit, onStart, isCompleted }: {
+  day: Day; onEdit: (d: Day) => void; onStart: (d: Day) => void; isCompleted: boolean;
+}) {
   const c = DAY_COLORS[day.day] || { bg:"#f9fafb", text:"#6b7280", badge:"DAY", accent:"#6366f1" };
   const [hovered, setHovered] = useState(false);
 
@@ -241,6 +213,26 @@ function DayCard({ day, onEdit, onStart }: { day: Day; onEdit: (d: Day) => void;
       <div style={{ display:"flex", alignItems:"center", gap:"12px", background:"#f9fafb", borderRadius:"12px", padding:"12px", opacity:0.5 }}>
         <div style={{ width:"36px", height:"36px", borderRadius:"8px", background:c.bg, color:c.text, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"10px", fontWeight:500, flexShrink:0 }}>{c.badge}</div>
         <p style={{ fontSize:"12px", color:"#9ca3af", margin:0 }}>Rest day — recovery</p>
+      </div>
+    );
+  }
+
+  if (isCompleted) {
+    return (
+      <div style={{ background:"#f0fdf4", borderRadius:"12px", border:"1px solid #bbf7d0" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:"12px", padding:"12px 12px 8px" }}>
+          <div style={{ width:"36px", height:"36px", borderRadius:"8px", background:c.bg, color:c.text, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"10px", fontWeight:500, flexShrink:0 }}>{c.badge}</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <p style={{ fontSize:"12px", fontWeight:500, color:"#15803d", margin:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{day.name}</p>
+            <p style={{ fontSize:"10px", color:"#86efac", margin:"2px 0 0" }}>{day.duration} · completed today</p>
+          </div>
+          <div style={{ width:"28px", height:"28px", borderRadius:"50%", background:"#22c55e", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+        <div style={{ borderLeft:"2px solid #bbf7d0", marginLeft:"16px", paddingLeft:"12px", paddingBottom:"12px", display:"flex", flexDirection:"column", gap:"4px" }}>
+          {day.exercises?.map((ex, i) => <p key={i} style={{ fontSize:"10px", color:"#86efac", margin:0 }}>{ex}</p>)}
+        </div>
       </div>
     );
   }
@@ -262,7 +254,7 @@ function DayCard({ day, onEdit, onStart }: { day: Day; onEdit: (d: Day) => void;
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
             </svg>
           </button>
-          <div style={{ width:"28px", height:"28px", display:"flex", alignItems:"center", justifyContent:"center", color:hovered ? "#6b7280" : "#d1d5db", transition:"color 0.15s" }}>
+          <div style={{ width:"28px", height:"28px", display:"flex", alignItems:"center", justifyContent:"center", color:hovered ? "#6b7280" : "#d1d5db" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </div>
         </div>
@@ -274,14 +266,13 @@ function DayCard({ day, onEdit, onStart }: { day: Day; onEdit: (d: Day) => void;
   );
 }
 
-// ── ChatBox ───────────────────────────────────────────────────────────────────
+// ── ChatBox ────────────────────────────────────────────────────────────────────
 function ChatBox({ plan, goal, level, onPlanUpdate }: { plan: Plan; goal: string; level: string; onPlanUpdate: (p: Plan) => void }) {
   const [msgs, setMsgs] = useState([{ role:"assistant", text:"Hey! I'm your AI trainer. Ask me anything about your plan — I can adjust workouts, swap exercises, add rest days, or rebuild around any restrictions.", updated:false }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => { if (open) bottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [msgs, open]);
 
   async function send(text?: string) {
@@ -336,7 +327,7 @@ function ChatBox({ plan, goal, level, onPlanUpdate }: { plan: Plan; goal: string
                 </div>
                 <div style={{ padding:"8px 12px", borderRadius:"16px", borderBottomLeftRadius:"4px", background:"#f3f4f6" }}>
                   <div style={{ display:"flex", gap:"4px", alignItems:"center", height:"16px" }}>
-                    {[0, 0.2, 0.4].map((d, i) => <div key={i} style={{ width:"6px", height:"6px", borderRadius:"50%", background:"#9ca3af", animation:`bounce 1s infinite ${d}s` }}/>)}
+                    {[0,0.2,0.4].map((d,i) => <div key={i} style={{ width:"6px", height:"6px", borderRadius:"50%", background:"#9ca3af", animation:`bounce 1s infinite ${d}s` }}/>)}
                   </div>
                 </div>
               </div>
@@ -365,29 +356,62 @@ function ChatBox({ plan, goal, level, onPlanUpdate }: { plan: Plan; goal: string
   );
 }
 
-// ── WorkoutTab (default export) ───────────────────────────────────────────────
+// ── WorkoutTab (default export) ────────────────────────────────────────────────
 export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (n: string, d: string, c: number, s: number) => void }) {
   const [goal, setGoal] = useState("Lose weight");
   const [level, setLevel] = useState("Beginner");
   const [prompt, setPrompt] = useState("");
-  const [plan, setPlan] = useState<Plan | null>(() => loadPlanFromStorage());
+
+  // ── KEY FIX: all localStorage reads happen in useEffect, never in useState initializer
+  // This prevents server/client hydration mismatch
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [workoutLog, setWorkoutLog] = useState<Record<string, { dayName: string }>>({});
+  const [mounted, setMounted] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [editDay, setEditDay] = useState<Day | null>(null);
   const [sessionDay, setSessionDay] = useState<Day | null>(null);
   const [toast, setToast] = useState("");
 
+  // Load everything from localStorage after mount
+  useEffect(() => {
+    try {
+      // Load workout log
+      const log = JSON.parse(localStorage.getItem("fitforge_log") || "{}");
+      setWorkoutLog(log);
+
+      // Load plan — check week key
+      const raw = localStorage.getItem("fitforge_plan");
+      if (raw) {
+        const { weekKey, plan: savedPlan } = JSON.parse(raw);
+        if (weekKey === getWeekKey()) setPlan(savedPlan);
+        else localStorage.removeItem("fitforge_plan");
+      }
+    } catch { /* ignore */ }
+    setMounted(true);
+  }, []);
+
+  const today = new Date();
+  const todayStr = localDateStr(today);
+  const daysOfWeek = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+  const currentDayName = daysOfWeek[today.getDay() === 0 ? 6 : today.getDay() - 1];
+  const currentDayIndex = daysOfWeek.indexOf(currentDayName);
+  const pastDays = daysOfWeek.slice(0, currentDayIndex);
+
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 2500); }
 
-  function updatePlan(newPlan: Plan) {
-    setPlan(newPlan);
-    savePlanToStorage(newPlan);
-  }
+  function updatePlan(newPlan: Plan) { setPlan(newPlan); savePlanToStorage(newPlan); }
 
   async function generate() {
     setLoading(true); setError(""); setPlan(null);
     try {
-      const res = await fetch("/api/generate-plan", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ goal, level, userPrompt:prompt }) });
+      console.log("currentDay:", currentDayName, "pastDays:", pastDays);
+      const res = await fetch("/api/generate-plan", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({ goal, level, userPrompt:prompt, currentDay:currentDayName, pastDays })
+      });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       updatePlan(data);
@@ -395,11 +419,31 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
     finally { setLoading(false); }
   }
 
-  function startOver() {
-    clearPlanFromStorage();
-    setPlan(null);
-    setError("");
-    setPrompt("");
+  function handleWorkoutComplete(n: string, d: string, c: number, s: number) {
+    const updated = { ...workoutLog, [todayStr]: { dayName: n } };
+    setWorkoutLog(updated);
+    localStorage.setItem("fitforge_log", JSON.stringify(updated));
+    onWorkoutComplete(n, d, c, s);
+    setSessionDay(null);
+    showToast("Workout logged!");
+  }
+
+  function startOver() { clearPlanFromStorage(); setPlan(null); setError(""); setPrompt(""); }
+
+  // Don't render plan-dependent UI until mounted to avoid hydration mismatch
+  if (!mounted) {
+    return (
+      <>
+        <div style={{ background:"#1a1a2e", padding:"20px" }}>
+          <h1 style={{ color:"white", fontSize:"18px", fontWeight:500, margin:0 }}>Build your week</h1>
+          <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"12px", margin:"4px 0 0" }}>Powered by AI — just describe your situation</p>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", padding:"64px 0" }}>
+          <div style={{ width:"24px", height:"24px", borderRadius:"50%", border:"2px solid #e5e7eb", borderTopColor:"#6366f1", animation:"spin 0.8s linear infinite" }} />
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </>
+    );
   }
 
   return (
@@ -456,9 +500,7 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
 
         {plan && !loading && (
           <>
-            {toast && (
-              <div style={{ marginBottom:"12px", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:"12px", padding:"10px 16px", fontSize:"12px", color:"#16a34a", textAlign:"center", fontWeight:500 }}>{toast}</div>
-            )}
+            {toast && <div style={{ marginBottom:"12px", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:"12px", padding:"10px 16px", fontSize:"12px", color:"#16a34a", textAlign:"center", fontWeight:500 }}>{toast}</div>}
             {plan.tip && (
               <div style={{ background:"#eef2ff", borderRadius:"12px", padding:"12px", marginBottom:"16px" }}>
                 <p style={{ fontSize:"10px", color:"#4f46e5", fontWeight:500, margin:"0 0 4px" }}>AI tip for you</p>
@@ -466,13 +508,19 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
               </div>
             )}
             <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
-              {plan.days.map(day => (
-                <DayCard key={day.day} day={day} onEdit={d => setEditDay(d)} onStart={d => setSessionDay(d)} />
-              ))}
+              {plan.days.map(day => {
+                const isCompletedToday = day.type !== "rest" && !!workoutLog[todayStr] && workoutLog[todayStr].dayName === day.name;
+                return (
+                  <DayCard key={day.day} day={day}
+                    onEdit={d => setEditDay(d)}
+                    onStart={d => { if (!isCompletedToday) setSessionDay(d); }}
+                    isCompleted={isCompletedToday}
+                  />
+                );
+              })}
             </div>
             <ChatBox plan={plan} goal={goal} level={level} onPlanUpdate={p => { updatePlan(p); showToast("Plan updated!"); }} />
-            <button onClick={startOver}
-              style={{ width:"100%", marginTop:"12px", background:"transparent", border:"1px solid #e5e7eb", borderRadius:"12px", padding:"10px", fontSize:"12px", color:"#9ca3af", cursor:"pointer" }}>
+            <button onClick={startOver} style={{ width:"100%", marginTop:"12px", background:"transparent", border:"1px solid #e5e7eb", borderRadius:"12px", padding:"10px", fontSize:"12px", color:"#9ca3af", cursor:"pointer" }}>
               ← Start over
             </button>
           </>
@@ -481,13 +529,19 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
 
       {editDay && (
         <EditModal day={editDay}
-          onSave={d => { updatePlan({ ...plan!, days: plan!.days.map(x => x.day === d.day ? d : x) }); setEditDay(null); showToast("Day updated!"); }}
+          onSave={d => { updatePlan({ ...plan!, days:plan!.days.map(x => x.day === d.day ? d : x) }); setEditDay(null); showToast("Day updated!"); }}
           onClose={() => setEditDay(null)} />
       )}
       {sessionDay && (
-        <WorkoutSession day={sessionDay} onClose={() => setSessionDay(null)}
-          onDone={(n, d, c, s) => { onWorkoutComplete(n, d, c, s); setSessionDay(null); showToast("Workout logged!"); }} />
+        <WorkoutSession day={sessionDay} onClose={() => setSessionDay(null)} onDone={handleWorkoutComplete} />
       )}
+
+      <style>{`
+        @keyframes slideUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes popIn { 0%{transform:scale(0.6);opacity:0} 70%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
+        @keyframes spin { to{transform:rotate(360deg)} }
+        @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+      `}</style>
     </>
   );
 }
