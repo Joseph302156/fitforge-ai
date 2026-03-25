@@ -22,6 +22,11 @@ function getWeekKey(date: Date): string {
   return `${date.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
 }
 
+// Get local date string YYYY-MM-DD without timezone shift
+function localDateStr(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function getDayName(date: Date): string {
   return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][date.getDay()];
 }
@@ -60,30 +65,28 @@ const MONTH_NAMES = ["January","February","March","April","May","June","July","A
 
 export default function CalendarTab({ workoutLog }: { workoutLog: Record<string, LogEntry> }) {
   const today = new Date();
+  const todayStr = localDateStr(today);
+
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [selectedDate, setSelectedDate] = useState<string | null>(
-    today.toISOString().split("T")[0]
-  );
+  const [selectedDate, setSelectedDate] = useState<string | null>(todayStr);
 
   const savedPlan = loadCurrentPlan();
   const currentWeekKey = getWeekKey(today);
   const planIsThisWeek = savedPlan?.weekKey === currentWeekKey;
 
-  // Build set of scheduled workout days from current plan
+  // Build set of scheduled workout dates from current plan
   const scheduledWorkoutDays = new Set<string>();
   if (planIsThisWeek && savedPlan?.plan?.days) {
-    // Find Monday of current week
     const dayOfWeek = today.getDay();
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const monday = new Date(today);
     monday.setDate(today.getDate() + mondayOffset);
-
     savedPlan.plan.days.forEach((d, i) => {
       if (d.type !== "rest") {
         const dayDate = new Date(monday);
         dayDate.setDate(monday.getDate() + i);
-        scheduledWorkoutDays.add(dayDate.toISOString().split("T")[0]);
+        scheduledWorkoutDays.add(localDateStr(dayDate));
       }
     });
   }
@@ -100,50 +103,54 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
     setSelectedDate(null);
   }
 
-  // Calendar grid calculation
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const todayStr = today.toISOString().split("T")[0];
 
-  function dateStr(day: number) {
+  function cellDateStr(day: number): string {
     return `${viewYear}-${String(viewMonth + 1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
   }
 
-  function getCellType(day: number): "completed" | "missed" | "today" | "future" | "empty" {
-    const ds = dateStr(day);
+  function getCellType(day: number): "completed" | "missed" | "today" | "today-completed" | "future" | "empty" {
+    const ds = cellDateStr(day);
+    const isToday = ds === todayStr;
+    const hasLog = !!workoutLog[ds];
+    if (isToday && hasLog) return "today-completed";
+    if (isToday) return "today";
+    if (hasLog) return "completed";
     const cellDate = new Date(viewYear, viewMonth, day);
-    if (workoutLog[ds]) return "completed";
-    if (ds === todayStr) return "today";
-    if (cellDate > today) return "future";
+    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (cellDate > todayMidnight) return "future";
     if (scheduledWorkoutDays.has(ds)) return "missed";
     return "empty";
   }
 
-  // Stats
-  const monthWorkouts = Object.keys(workoutLog).filter(d => d.startsWith(`${viewYear}-${String(viewMonth + 1).padStart(2,"0")}`));
+  const monthWorkouts = Object.keys(workoutLog).filter(d =>
+    d.startsWith(`${viewYear}-${String(viewMonth + 1).padStart(2,"0")}`)
+  );
   const totalMonthWorkouts = monthWorkouts.length;
 
-  // Streak calculation
+  // Streak: count backwards from today
   let streak = 0;
   const check = new Date(today);
   while (true) {
-    const ds = check.toISOString().split("T")[0];
+    const ds = localDateStr(check);
     if (workoutLog[ds]) { streak++; check.setDate(check.getDate() - 1); }
     else break;
   }
 
   const selectedEntry = selectedDate ? workoutLog[selectedDate] : null;
-  const selectedDayName = selectedDate ? getDayName(new Date(selectedDate + "T12:00:00")) : null;
+  const selectedDayName = selectedDate
+    ? getDayName(new Date(parseInt(selectedDate.split("-")[0]), parseInt(selectedDate.split("-")[1]) - 1, parseInt(selectedDate.split("-")[2])))
+    : null;
   const selectedBadge = selectedDayName ? BADGE_COLORS[selectedDayName] : null;
-  const selectedIsMissed = selectedDate && !selectedEntry && scheduledWorkoutDays.has(selectedDate) && new Date(selectedDate) < today;
+  const selectedIsMissed = selectedDate && !selectedEntry && scheduledWorkoutDays.has(selectedDate) && selectedDate < todayStr;
 
-  const cells = [];
+  const cells: (number | null)[] = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
   return (
     <>
-      {/* Header */}
       <div style={{ background: "#1a1a2e", padding: "20px" }}>
         <h1 style={{ color: "white", fontSize: "18px", fontWeight: 500, margin: 0 }}>Monthly calendar</h1>
         <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "12px", margin: "4px 0 0" }}>
@@ -170,33 +177,34 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
         {/* Calendar grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "3px" }}>
           {cells.map((day, i) => {
-            if (day === null) return <div key={`empty-${i}`} />;
-            const ds = dateStr(day);
+            if (day === null) return <div key={`e-${i}`} />;
+            const ds = cellDateStr(day);
             const type = getCellType(day);
             const isSelected = selectedDate === ds;
-            const dotColor = workoutLog[ds] ? DOT_COLORS[getDayName(new Date(ds + "T12:00:00"))] : null;
+            const dotColor = workoutLog[ds] ? DOT_COLORS[getDayName(new Date(viewYear, viewMonth, day))] : null;
 
             let bg = "#f9fafb";
             let numColor = "#9ca3af";
-            let border = isSelected ? "2px solid #4f46e5" : "1.5px solid transparent";
+            let extraBorder = isSelected ? "2px solid #4f46e5" : "1.5px solid transparent";
 
-            if (type === "completed") { bg = "#eef2ff"; numColor = "#4338ca"; }
-            else if (type === "missed") { bg = "#fef2f2"; numColor = "#dc2626"; }
-            else if (type === "today") { bg = "#1a1a2e"; numColor = "white"; border = isSelected ? "2px solid #4f46e5" : "1.5px solid transparent"; }
-            else if (type === "future") { bg = "#f9fafb"; numColor = "#d1d5db"; }
+            if (type === "completed")       { bg = "#eef2ff"; numColor = "#4338ca"; }
+            else if (type === "today-completed") { bg = "#1a1a2e"; numColor = "white"; }
+            else if (type === "today")      { bg = "#1a1a2e"; numColor = "white"; }
+            else if (type === "missed")     { bg = "#fef2f2"; numColor = "#dc2626"; }
+            else if (type === "future")     { bg = "#f9fafb"; numColor = "#d1d5db"; }
 
             return (
               <div key={ds} onClick={() => setSelectedDate(isSelected ? null : ds)}
-                style={{ aspectRatio: "1", borderRadius: "8px", background: bg, border, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", cursor: "pointer", transition: "border 0.15s" }}>
+                style={{ aspectRatio: "1", borderRadius: "8px", background: bg, border: extraBorder, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", cursor: "pointer", transition: "border 0.15s" }}>
                 <span style={{ fontSize: "11px", fontWeight: 500, color: numColor, lineHeight: 1 }}>{day}</span>
-                {type === "completed" && dotColor && (
+                {(type === "completed") && dotColor && (
                   <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: dotColor }} />
+                )}
+                {(type === "today-completed") && (
+                  <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "rgba(255,255,255,0.6)" }} />
                 )}
                 {type === "missed" && (
                   <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#fca5a5" }} />
-                )}
-                {type === "today" && workoutLog[ds] && (
-                  <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "rgba(255,255,255,0.6)" }} />
                 )}
               </div>
             );
@@ -206,12 +214,12 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
         {/* Legend */}
         <div style={{ display: "flex", gap: "12px", marginTop: "10px", flexWrap: "wrap" }}>
           {[
-            { color: "#eef2ff", dot: "#4f46e5", label: "Completed" },
-            { color: "#fef2f2", dot: "#fca5a5", label: "Missed" },
-            { color: "#f9fafb", dot: "#d1d5db", label: "No workout" },
+            { bg: "#eef2ff", dot: "#4f46e5", label: "Completed" },
+            { bg: "#fef2f2", dot: "#fca5a5", label: "Missed" },
+            { bg: "#f9fafb", dot: "#d1d5db", label: "Rest / no workout" },
           ].map(item => (
             <div key={item.label} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-              <div style={{ width: "14px", height: "14px", borderRadius: "4px", background: item.color, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: "14px", height: "14px", borderRadius: "4px", background: item.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: item.dot }} />
               </div>
               <span style={{ fontSize: "10px", color: "#9ca3af" }}>{item.label}</span>
