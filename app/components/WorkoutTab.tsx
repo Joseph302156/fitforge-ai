@@ -27,6 +27,43 @@ const CHAT_SUGGESTIONS = [
 type Day = { day: string; type: string; name: string; duration?: string; exercises?: string[] };
 type Plan = { days: Day[]; tip?: string };
 
+// ── Week key utility ──────────────────────────────────────────────────────────
+// Returns a string like "2026-W12" for the current ISO week
+function getWeekKey(): string {
+  const now = new Date();
+  const jan4 = new Date(now.getFullYear(), 0, 4);
+  const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
+  const weekNum = Math.ceil((dayOfYear + jan4.getDay()) / 7);
+  return `${now.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+}
+
+function loadPlanFromStorage(): Plan | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("fitforge_plan");
+    if (!raw) return null;
+    const { weekKey, plan } = JSON.parse(raw);
+    if (weekKey !== getWeekKey()) {
+      localStorage.removeItem("fitforge_plan");
+      return null;
+    }
+    return plan;
+  } catch {
+    return null;
+  }
+}
+
+function savePlanToStorage(plan: Plan) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("fitforge_plan", JSON.stringify({ weekKey: getWeekKey(), plan }));
+}
+
+function clearPlanFromStorage() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("fitforge_plan");
+}
+
+// ── WorkoutSession ────────────────────────────────────────────────────────────
 function WorkoutSession({ day, onClose, onDone }: {
   day: Day;
   onClose: () => void;
@@ -67,8 +104,8 @@ function WorkoutSession({ day, onClose, onDone }: {
 
   function fmt(s: number) {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60;
-    if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`;
-    return `${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sc).padStart(2, "0")}`;
+    return `${String(m).padStart(2, "0")}:${String(sc).padStart(2, "0")}`;
   }
 
   return (
@@ -94,7 +131,7 @@ function WorkoutSession({ day, onClose, onDone }: {
           {started && !done && (
             <>
               <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:"99px", height:"6px", overflow:"hidden", marginTop:"8px" }}>
-                <div style={{ height:"100%", borderRadius:"99px", background:c.accent, width:`${(completed/checked.length)*100}%`, transition:"width 0.5s" }} />
+                <div style={{ height:"100%", borderRadius:"99px", background:c.accent, width:`${(completed / checked.length) * 100}%`, transition:"width 0.5s" }} />
               </div>
               <p style={{ color:"rgba(255,255,255,0.35)", fontSize:"10px", textAlign:"center", margin:"6px 0 0" }}>{completed} of {checked.length} done</p>
             </>
@@ -140,6 +177,7 @@ function WorkoutSession({ day, onClose, onDone }: {
   );
 }
 
+// ── EditModal ─────────────────────────────────────────────────────────────────
 function EditModal({ day, onSave, onClose }: { day: Day; onSave: (d: Day) => void; onClose: () => void }) {
   const [name, setName] = useState(day.name);
   const [duration, setDuration] = useState(day.duration || "");
@@ -193,6 +231,7 @@ function EditModal({ day, onSave, onClose }: { day: Day; onSave: (d: Day) => voi
   );
 }
 
+// ── DayCard ───────────────────────────────────────────────────────────────────
 function DayCard({ day, onEdit, onStart }: { day: Day; onEdit: (d: Day) => void; onStart: (d: Day) => void }) {
   const c = DAY_COLORS[day.day] || { bg:"#f9fafb", text:"#6b7280", badge:"DAY", accent:"#6366f1" };
   const [hovered, setHovered] = useState(false);
@@ -235,6 +274,7 @@ function DayCard({ day, onEdit, onStart }: { day: Day; onEdit: (d: Day) => void;
   );
 }
 
+// ── ChatBox ───────────────────────────────────────────────────────────────────
 function ChatBox({ plan, goal, level, onPlanUpdate }: { plan: Plan; goal: string; level: string; onPlanUpdate: (p: Plan) => void }) {
   const [msgs, setMsgs] = useState([{ role:"assistant", text:"Hey! I'm your AI trainer. Ask me anything about your plan — I can adjust workouts, swap exercises, add rest days, or rebuild around any restrictions.", updated:false }]);
   const [input, setInput] = useState("");
@@ -247,8 +287,7 @@ function ChatBox({ plan, goal, level, onPlanUpdate }: { plan: Plan; goal: string
   async function send(text?: string) {
     const t = text || input.trim();
     if (!t || loading) return;
-    setInput("");
-    setLoading(true);
+    setInput(""); setLoading(true);
     const next = [...msgs, { role:"user", text:t, updated:false }];
     setMsgs(next);
     const summary = plan.days.map(d => d.type === "rest" ? `${d.day}: Rest` : `${d.day}: ${d.name} (${d.duration}) — ${d.exercises?.join(", ")}`).join("\n");
@@ -326,11 +365,12 @@ function ChatBox({ plan, goal, level, onPlanUpdate }: { plan: Plan; goal: string
   );
 }
 
+// ── WorkoutTab (default export) ───────────────────────────────────────────────
 export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (n: string, d: string, c: number, s: number) => void }) {
   const [goal, setGoal] = useState("Lose weight");
   const [level, setLevel] = useState("Beginner");
   const [prompt, setPrompt] = useState("");
-  const [plan, setPlan] = useState<Plan | null>(null);
+  const [plan, setPlan] = useState<Plan | null>(() => loadPlanFromStorage());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [editDay, setEditDay] = useState<Day | null>(null);
@@ -339,15 +379,27 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 2500); }
 
+  function updatePlan(newPlan: Plan) {
+    setPlan(newPlan);
+    savePlanToStorage(newPlan);
+  }
+
   async function generate() {
     setLoading(true); setError(""); setPlan(null);
     try {
       const res = await fetch("/api/generate-plan", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ goal, level, userPrompt:prompt }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setPlan(data);
+      updatePlan(data);
     } catch { setError("Something went wrong. Please try again."); }
     finally { setLoading(false); }
+  }
+
+  function startOver() {
+    clearPlanFromStorage();
+    setPlan(null);
+    setError("");
+    setPrompt("");
   }
 
   return (
@@ -358,6 +410,7 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
           {plan ? `${goal} · ${level} · tap a day to start` : "Powered by AI — just describe your situation"}
         </p>
       </div>
+
       <div style={{ padding:"20px" }}>
         {!plan && !loading && (
           <>
@@ -393,15 +446,19 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
             {error && <div style={{ marginTop:"12px", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:"12px", padding:"12px", fontSize:"12px", color:"#dc2626" }}>{error}</div>}
           </>
         )}
+
         {loading && (
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"64px 0", gap:"16px" }}>
             <div style={{ width:"32px", height:"32px", borderRadius:"50%", border:"2px solid #e5e7eb", borderTopColor:"#6366f1", animation:"spin 0.8s linear infinite" }} />
             <p style={{ fontSize:"12px", color:"#9ca3af" }}>Building your personalized plan...</p>
           </div>
         )}
+
         {plan && !loading && (
           <>
-            {toast && <div style={{ marginBottom:"12px", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:"12px", padding:"10px 16px", fontSize:"12px", color:"#16a34a", textAlign:"center", fontWeight:500 }}>{toast}</div>}
+            {toast && (
+              <div style={{ marginBottom:"12px", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:"12px", padding:"10px 16px", fontSize:"12px", color:"#16a34a", textAlign:"center", fontWeight:500 }}>{toast}</div>
+            )}
             {plan.tip && (
               <div style={{ background:"#eef2ff", borderRadius:"12px", padding:"12px", marginBottom:"16px" }}>
                 <p style={{ fontSize:"10px", color:"#4f46e5", fontWeight:500, margin:"0 0 4px" }}>AI tip for you</p>
@@ -413,17 +470,18 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
                 <DayCard key={day.day} day={day} onEdit={d => setEditDay(d)} onStart={d => setSessionDay(d)} />
               ))}
             </div>
-            <ChatBox plan={plan} goal={goal} level={level} onPlanUpdate={p => { setPlan(p); showToast("Plan updated!"); }} />
-            <button onClick={() => { setPlan(null); setError(""); setPrompt(""); }}
+            <ChatBox plan={plan} goal={goal} level={level} onPlanUpdate={p => { updatePlan(p); showToast("Plan updated!"); }} />
+            <button onClick={startOver}
               style={{ width:"100%", marginTop:"12px", background:"transparent", border:"1px solid #e5e7eb", borderRadius:"12px", padding:"10px", fontSize:"12px", color:"#9ca3af", cursor:"pointer" }}>
               ← Start over
             </button>
           </>
         )}
       </div>
+
       {editDay && (
         <EditModal day={editDay}
-          onSave={d => { setPlan(p => p ? { ...p, days:p.days.map(x => x.day === d.day ? d : x) } : p); setEditDay(null); showToast("Day updated!"); }}
+          onSave={d => { updatePlan({ ...plan!, days: plan!.days.map(x => x.day === d.day ? d : x) }); setEditDay(null); showToast("Day updated!"); }}
           onClose={() => setEditDay(null)} />
       )}
       {sessionDay && (
