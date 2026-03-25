@@ -406,7 +406,6 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
   async function generate() {
     setLoading(true); setError(""); setPlan(null);
     try {
-      console.log("currentDay:", currentDayName, "pastDays:", pastDays);
       const res = await fetch("/api/generate-plan", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
