@@ -202,12 +202,17 @@ function EditModal({ day, onSave, onClose }: { day: Day; onSave: (d: Day) => voi
 }
 
 // ── DayCard ────────────────────────────────────────────────────────────────────
-function DayCard({ day, onEdit, onStart, isCompleted }: {
-  day: Day; onEdit: (d: Day) => void; onStart: (d: Day) => void; isCompleted: boolean;
+function DayCard({ day, onEdit, onStart, isCompleted, isToday }: {
+  day: Day;
+  onEdit: (d: Day) => void;
+  onStart: (d: Day) => void;
+  isCompleted: boolean;
+  isToday: boolean;
 }) {
   const c = DAY_COLORS[day.day] || { bg:"#f9fafb", text:"#6b7280", badge:"DAY", accent:"#6366f1" };
   const [hovered, setHovered] = useState(false);
 
+  // Rest day
   if (day.type === "rest") {
     return (
       <div style={{ display:"flex", alignItems:"center", gap:"12px", background:"#f9fafb", borderRadius:"12px", padding:"12px", opacity:0.5 }}>
@@ -217,6 +222,7 @@ function DayCard({ day, onEdit, onStart, isCompleted }: {
     );
   }
 
+  // Completed today
   if (isCompleted) {
     return (
       <div style={{ background:"#f0fdf4", borderRadius:"12px", border:"1px solid #bbf7d0" }}>
@@ -237,26 +243,46 @@ function DayCard({ day, onEdit, onStart, isCompleted }: {
     );
   }
 
+  // Regular card — clickable only if today, editable always
   return (
-    <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onClick={() => onStart(day)}
-      style={{ background:"#f9fafb", borderRadius:"12px", border:hovered ? "1px solid #e5e7eb" : "1px solid #f3f4f6", cursor:"pointer", transition:"border-color 0.15s" }}>
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={() => { if (isToday) onStart(day); }}
+      style={{
+        background: isToday ? "#f9fafb" : "#f9fafb",
+        borderRadius:"12px",
+        border: hovered && isToday ? "1px solid #e5e7eb" : "1px solid #f3f4f6",
+        cursor: isToday ? "pointer" : "default",
+        transition:"border-color 0.15s",
+        opacity: isToday ? 1 : 0.75,
+      }}>
       <div style={{ display:"flex", alignItems:"center", gap:"12px", padding:"12px 12px 8px" }}>
         <div style={{ width:"36px", height:"36px", borderRadius:"8px", background:c.bg, color:c.text, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"10px", fontWeight:500, flexShrink:0 }}>{c.badge}</div>
         <div style={{ flex:1, minWidth:0 }}>
           <p style={{ fontSize:"12px", fontWeight:500, color:"#1f2937", margin:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{day.name}</p>
           <p style={{ fontSize:"10px", color:"#9ca3af", margin:"2px 0 0" }}>{day.duration} · {day.exercises?.length} exercises</p>
+          {/* Lock label for non-today days */}
+          {!isToday && (
+            <p style={{ fontSize:"10px", color:"#f59e0b", margin:"2px 0 0" }}>available on {day.day}</p>
+          )}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-          <button onClick={e => { e.stopPropagation(); onEdit(day); }}
+          {/* Edit button — always visible on hover regardless of day */}
+          <button
+            onClick={e => { e.stopPropagation(); onEdit(day); }}
             style={{ width:"28px", height:"28px", borderRadius:"8px", border:"1px solid #e5e7eb", background:"transparent", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", opacity:hovered ? 1 : 0, transition:"opacity 0.15s", color:"#d1d5db" }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
             </svg>
           </button>
-          <div style={{ width:"28px", height:"28px", display:"flex", alignItems:"center", justifyContent:"center", color:hovered ? "#6b7280" : "#d1d5db" }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
+          {/* Arrow only shows for today's card */}
+          {isToday && (
+            <div style={{ width:"28px", height:"28px", display:"flex", alignItems:"center", justifyContent:"center", color:hovered ? "#6b7280" : "#d1d5db", transition:"color 0.15s" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          )}
         </div>
       </div>
       <div style={{ borderLeft:"2px solid #e5e7eb", marginLeft:"16px", paddingLeft:"12px", paddingBottom:"12px", display:"flex", flexDirection:"column", gap:"4px" }}>
@@ -356,36 +382,28 @@ function ChatBox({ plan, goal, level, onPlanUpdate }: { plan: Plan; goal: string
   );
 }
 
-// ── WorkoutTab (default export) ────────────────────────────────────────────────
+// ── WorkoutTab ─────────────────────────────────────────────────────────────────
 export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (n: string, d: string, c: number, s: number) => void }) {
   const [goal, setGoal] = useState("Lose weight");
   const [level, setLevel] = useState("Beginner");
   const [prompt, setPrompt] = useState("");
-
-  // ── KEY FIX: all localStorage reads happen in useEffect, never in useState initializer
-  // This prevents server/client hydration mismatch
   const [plan, setPlan] = useState<Plan | null>(null);
   const [workoutLog, setWorkoutLog] = useState<Record<string, { dayName: string }>>({});
   const [mounted, setMounted] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [editDay, setEditDay] = useState<Day | null>(null);
   const [sessionDay, setSessionDay] = useState<Day | null>(null);
   const [toast, setToast] = useState("");
 
-  // Load everything from localStorage after mount
   useEffect(() => {
     try {
-      // Load workout log
       const log = JSON.parse(localStorage.getItem("fitforge_log") || "{}");
       setWorkoutLog(log);
-
-      // Load plan — check week key
       const raw = localStorage.getItem("fitforge_plan");
       if (raw) {
-        const { weekKey, plan: savedPlan } = JSON.parse(raw);
-        if (weekKey === getWeekKey()) setPlan(savedPlan);
+        const { weekKey, plan: saved } = JSON.parse(raw);
+        if (weekKey === getWeekKey()) setPlan(saved);
         else localStorage.removeItem("fitforge_plan");
       }
     } catch { /* ignore */ }
@@ -400,17 +418,12 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
   const pastDays = daysOfWeek.slice(0, currentDayIndex);
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 2500); }
-
-  function updatePlan(newPlan: Plan) { setPlan(newPlan); savePlanToStorage(newPlan); }
+  function updatePlan(p: Plan) { setPlan(p); savePlanToStorage(p); }
 
   async function generate() {
     setLoading(true); setError(""); setPlan(null);
     try {
-      const res = await fetch("/api/generate-plan", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({ goal, level, userPrompt:prompt, currentDay:currentDayName, pastDays })
-      });
+      const res = await fetch("/api/generate-plan", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ goal, level, userPrompt:prompt, currentDay:currentDayName, pastDays }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       updatePlan(data);
@@ -429,7 +442,6 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
 
   function startOver() { clearPlanFromStorage(); setPlan(null); setError(""); setPrompt(""); }
 
-  // Don't render plan-dependent UI until mounted to avoid hydration mismatch
   if (!mounted) {
     return (
       <>
@@ -450,7 +462,7 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
       <div style={{ background:"#1a1a2e", padding:"20px" }}>
         <h1 style={{ color:"white", fontSize:"18px", fontWeight:500, margin:0 }}>{plan ? "Your weekly plan" : "Build your week"}</h1>
         <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"12px", margin:"4px 0 0" }}>
-          {plan ? `${goal} · ${level} · tap a day to start` : "Powered by AI — just describe your situation"}
+          {plan ? `${goal} · ${level} · tap today's workout to start` : "Powered by AI — just describe your situation"}
         </p>
       </div>
 
@@ -509,11 +521,15 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
             <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
               {plan.days.map(day => {
                 const isCompletedToday = day.type !== "rest" && !!workoutLog[todayStr] && workoutLog[todayStr].dayName === day.name;
+                const isToday = day.day === currentDayName;
                 return (
-                  <DayCard key={day.day} day={day}
+                  <DayCard
+                    key={day.day}
+                    day={day}
                     onEdit={d => setEditDay(d)}
                     onStart={d => { if (!isCompletedToday) setSessionDay(d); }}
                     isCompleted={isCompletedToday}
+                    isToday={isToday}
                   />
                 );
               })}
