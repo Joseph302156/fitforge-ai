@@ -36,7 +36,7 @@ Rules for estimates:
 - If the user mentions a specific restaurant or brand, use that context
 - Round all numbers to the nearest integer
 - If unsure about portions, assume a typical serving size and mention it in the message`,
-      messages: messages.map((m: { role: string; content: string }) => ({
+      messages: messages.map((m) => ({
         role: m.role,
         content: m.content,
       })),
