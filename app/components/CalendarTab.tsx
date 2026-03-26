@@ -98,12 +98,13 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
   const [selectedDate, setSelectedDate] = useState<string | null>(todayStr);
 
   // Load plan after mount so localStorage is available
-  const [savedPlan, setSavedPlan] = useState<SavedPlan | null>(null);
-  useEffect(() => {
-    setSavedPlan(loadCurrentPlan());
-  }, []);
+  const [scheduledDaysMap, setScheduledDaysMap] = useState<Map<string, { name: string; dayName: string }>>(new Map());
 
-  const scheduledDaysMap = buildScheduledDaysMap(savedPlan, today);
+  useEffect(() => {
+    const plan = loadCurrentPlan();
+    const map = buildScheduledDaysMap(plan, today);
+    setScheduledDaysMap(map);
+  }, []);
 
   function prevMonth() {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
