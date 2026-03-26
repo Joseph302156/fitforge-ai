@@ -15,36 +15,7 @@ type SavedPlan = {
   };
 };
 
-function getWeekKey(date: Date): string {
-  const jan4 = new Date(date.getFullYear(), 0, 4);
-  const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000);
-  const weekNum = Math.ceil((dayOfYear + jan4.getDay()) / 7);
-  return `${date.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
-}
-
-// Get local date string YYYY-MM-DD without timezone shift
-function localDateStr(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function getDayName(date: Date): string {
-  return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][date.getDay()];
-}
-
-function formatTime(s: number): string {
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`;
-  return `${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`;
-}
-
-function loadCurrentPlan(): SavedPlan | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem("fitforge_plan");
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch { return null; }
-}
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 const DOT_COLORS: Record<string, string> = {
   Monday: "#4f46e5", Tuesday: "#16a34a", Wednesday: "#ea580c",
@@ -61,10 +32,72 @@ const BADGE_COLORS: Record<string, { bg: string; text: string; label: string }> 
   Sunday:    { bg: "#fafaf9", text: "#57534e", label: "SUN" },
 };
 
-const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+// Timezone-safe local date string
+function localDateStr(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+}
+
+function getDayName(date: Date): string {
+  return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][date.getDay()];
+}
+
+function formatTime(s: number): string {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`;
+  return `${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`;
+}
+
+function getWeekKey(date: Date): string {
+  const jan4 = new Date(date.getFullYear(), 0, 4);
+  const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000);
+  const weekNum = Math.ceil((dayOfYear + jan4.getDay()) / 7);
+  return `${date.getFullYear()}-W${String(weekNum).padStart(2,"0")}`;
+}
+
+function loadCurrentPlan(): SavedPlan | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("fitforge_plan");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+// Build a map of date -> scheduled day info from the current plan
+// Only includes days that are type "workout" in the plan
+function buildScheduledDaysMap(plan: SavedPlan | null, today: Date): Map<string, { name: string; dayName: string }> {
+  const map = new Map<string, { name: string; dayName: string }>();
+  if (!plan?.plan?.days) return map;
+
+  const currentWeekKey = getWeekKey(today);
+  if (plan.weekKey !== currentWeekKey) return map;
+
+  // Find Monday of current week
+  const dayOfWeek = today.getDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset);
+  monday.setHours(0, 0, 0, 0);
+
+  const daysOfWeek = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+
+  plan.plan.days.forEach((d, i) => {
+    if (d.type === "workout") {
+      const dayDate = new Date(monday);
+      dayDate.setDate(monday.getDate() + i);
+      const ds = localDateStr(dayDate);
+      map.set(ds, { name: d.name || "", dayName: daysOfWeek[i] });
+    }
+  });
+
+  return map;
+}
+
+type CellType = "completed" | "today-completed" | "today-scheduled" | "today-empty" | "upcoming" | "missed" | "past-empty" | "future-empty";
 
 export default function CalendarTab({ workoutLog }: { workoutLog: Record<string, LogEntry> }) {
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const todayStr = localDateStr(today);
 
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -72,24 +105,7 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
   const [selectedDate, setSelectedDate] = useState<string | null>(todayStr);
 
   const savedPlan = loadCurrentPlan();
-  const currentWeekKey = getWeekKey(today);
-  const planIsThisWeek = savedPlan?.weekKey === currentWeekKey;
-
-  // Build set of scheduled workout dates from current plan
-  const scheduledWorkoutDays = new Set<string>();
-  if (planIsThisWeek && savedPlan?.plan?.days) {
-    const dayOfWeek = today.getDay();
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const monday = new Date(today);
-    monday.setDate(today.getDate() + mondayOffset);
-    savedPlan.plan.days.forEach((d, i) => {
-      if (d.type !== "rest") {
-        const dayDate = new Date(monday);
-        dayDate.setDate(monday.getDate() + i);
-        scheduledWorkoutDays.add(localDateStr(dayDate));
-      }
-    });
-  }
+  const scheduledDaysMap = buildScheduledDaysMap(savedPlan, today);
 
   function prevMonth() {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
@@ -110,24 +126,37 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
     return `${viewYear}-${String(viewMonth + 1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
   }
 
-  function getCellType(day: number): "completed" | "missed" | "today" | "today-completed" | "future" | "empty" {
+  function getCellType(day: number): CellType {
     const ds = cellDateStr(day);
-    const isToday = ds === todayStr;
-    const hasLog = !!workoutLog[ds];
-    if (isToday && hasLog) return "today-completed";
-    if (isToday) return "today";
-    if (hasLog) return "completed";
     const cellDate = new Date(viewYear, viewMonth, day);
-    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    if (cellDate > todayMidnight) return "future";
-    if (scheduledWorkoutDays.has(ds)) return "missed";
-    return "empty";
+    const hasLog = !!workoutLog[ds];
+    const isScheduled = scheduledDaysMap.has(ds);
+    const isToday = ds === todayStr;
+    const isPast = cellDate < today;
+    const isFuture = cellDate > today;
+
+    if (isToday) {
+      if (hasLog) return "today-completed";
+      if (isScheduled) return "today-scheduled";
+      return "today-empty";
+    }
+    if (hasLog) return "completed";
+    if (isPast && isScheduled) return "missed";
+    if (isPast) return "past-empty";
+    if (isFuture && isScheduled) return "upcoming";
+    return "future-empty";
   }
 
-  const monthWorkouts = Object.keys(workoutLog).filter(d =>
-    d.startsWith(`${viewYear}-${String(viewMonth + 1).padStart(2,"0")}`)
-  );
+  // Month stats
+  const monthPrefix = `${viewYear}-${String(viewMonth + 1).padStart(2,"0")}`;
+  const monthWorkouts = Object.keys(workoutLog).filter(d => d.startsWith(monthPrefix));
   const totalMonthWorkouts = monthWorkouts.length;
+
+  // Count upcoming workouts this week
+  const upcomingCount = Array.from(scheduledDaysMap.keys()).filter(ds => {
+    const d = new Date(ds + "T00:00:00");
+    return d > today;
+  }).length;
 
   // Streak: count backwards from today
   let streak = 0;
@@ -138,23 +167,40 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
     else break;
   }
 
+  // Selected day detail
   const selectedEntry = selectedDate ? workoutLog[selectedDate] : null;
+  const selectedScheduled = selectedDate ? scheduledDaysMap.get(selectedDate) : null;
+  const selectedCellDate = selectedDate ? new Date(selectedDate + "T00:00:00") : null;
   const selectedDayName = selectedDate
     ? getDayName(new Date(parseInt(selectedDate.split("-")[0]), parseInt(selectedDate.split("-")[1]) - 1, parseInt(selectedDate.split("-")[2])))
     : null;
   const selectedBadge = selectedDayName ? BADGE_COLORS[selectedDayName] : null;
-  const selectedIsMissed = selectedDate && !selectedEntry && scheduledWorkoutDays.has(selectedDate) && selectedDate < todayStr;
+  const selectedIsMissed = selectedDate && !selectedEntry && scheduledDaysMap.has(selectedDate) && selectedCellDate && selectedCellDate < today;
+  const selectedIsUpcoming = selectedDate && !selectedEntry && scheduledDaysMap.has(selectedDate) && selectedCellDate && selectedCellDate > today;
 
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  function getCellStyle(type: CellType): { bg: string; numColor: string } {
+    switch (type) {
+      case "completed":       return { bg: "#eef2ff", numColor: "#4338ca" };
+      case "today-completed": return { bg: "#1a1a2e", numColor: "white" };
+      case "today-scheduled": return { bg: "#1a1a2e", numColor: "white" };
+      case "today-empty":     return { bg: "#1a1a2e", numColor: "white" };
+      case "upcoming":        return { bg: "#f5f3ff", numColor: "#7c3aed" };
+      case "missed":          return { bg: "#fef2f2", numColor: "#dc2626" };
+      case "past-empty":      return { bg: "#f9fafb", numColor: "#d1d5db" };
+      case "future-empty":    return { bg: "#f9fafb", numColor: "#d1d5db" };
+    }
+  }
 
   return (
     <>
       <div style={{ background: "#1a1a2e", padding: "20px" }}>
         <h1 style={{ color: "white", fontSize: "18px", fontWeight: 500, margin: 0 }}>Monthly calendar</h1>
         <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "12px", margin: "4px 0 0" }}>
-          {MONTH_NAMES[viewMonth]} {viewYear} · {totalMonthWorkouts} workout{totalMonthWorkouts !== 1 ? "s" : ""} logged
+          {MONTH_NAMES[viewMonth]} {viewYear} · {totalMonthWorkouts} completed · {upcomingCount} upcoming
         </p>
       </div>
 
@@ -180,28 +226,27 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
             if (day === null) return <div key={`e-${i}`} />;
             const ds = cellDateStr(day);
             const type = getCellType(day);
+            const { bg, numColor } = getCellStyle(type);
             const isSelected = selectedDate === ds;
             const dotColor = workoutLog[ds] ? DOT_COLORS[getDayName(new Date(viewYear, viewMonth, day))] : null;
 
-            let bg = "#f9fafb";
-            let numColor = "#9ca3af";
-            let extraBorder = isSelected ? "2px solid #4f46e5" : "1.5px solid transparent";
-
-            if (type === "completed")       { bg = "#eef2ff"; numColor = "#4338ca"; }
-            else if (type === "today-completed") { bg = "#1a1a2e"; numColor = "white"; }
-            else if (type === "today")      { bg = "#1a1a2e"; numColor = "white"; }
-            else if (type === "missed")     { bg = "#fef2f2"; numColor = "#dc2626"; }
-            else if (type === "future")     { bg = "#f9fafb"; numColor = "#d1d5db"; }
-
             return (
               <div key={ds} onClick={() => setSelectedDate(isSelected ? null : ds)}
-                style={{ aspectRatio: "1", borderRadius: "8px", background: bg, border: extraBorder, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", cursor: "pointer", transition: "border 0.15s" }}>
+                style={{ aspectRatio: "1", borderRadius: "8px", background: bg, border: isSelected ? "2px solid #4f46e5" : "1.5px solid transparent", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", cursor: "pointer", transition: "border 0.15s" }}>
                 <span style={{ fontSize: "11px", fontWeight: 500, color: numColor, lineHeight: 1 }}>{day}</span>
-                {(type === "completed") && dotColor && (
+
+                {/* Dot indicators */}
+                {type === "completed" && dotColor && (
                   <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: dotColor }} />
                 )}
-                {(type === "today-completed") && (
-                  <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "rgba(255,255,255,0.6)" }} />
+                {type === "today-completed" && (
+                  <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "rgba(255,255,255,0.7)" }} />
+                )}
+                {type === "today-scheduled" && (
+                  <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.6)" }} />
+                )}
+                {type === "upcoming" && (
+                  <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#7c3aed", opacity: 0.6 }} />
                 )}
                 {type === "missed" && (
                   <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#fca5a5" }} />
@@ -212,11 +257,12 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
         </div>
 
         {/* Legend */}
-        <div style={{ display: "flex", gap: "12px", marginTop: "10px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
           {[
             { bg: "#eef2ff", dot: "#4f46e5", label: "Completed" },
+            { bg: "#f5f3ff", dot: "#7c3aed", label: "Upcoming" },
             { bg: "#fef2f2", dot: "#fca5a5", label: "Missed" },
-            { bg: "#f9fafb", dot: "#d1d5db", label: "Rest / no workout" },
+            { bg: "#f9fafb", dot: "#d1d5db", label: "Rest / none" },
           ].map(item => (
             <div key={item.label} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
               <div style={{ width: "14px", height: "14px", borderRadius: "4px", background: item.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -230,7 +276,9 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
         {/* Selected day detail */}
         {selectedDate && (
           <div style={{ marginTop: "12px", background: "#f9fafb", borderRadius: "12px", padding: "12px 14px", border: "1px solid #f3f4f6", animation: "fadeIn 0.2s ease" }}>
-            {selectedEntry && selectedBadge ? (
+
+            {/* Completed workout */}
+            {selectedEntry && selectedBadge && (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
                   <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: selectedBadge.bg, color: selectedBadge.text, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 700, flexShrink: 0 }}>
@@ -256,10 +304,32 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
                   ))}
                 </div>
               </>
-            ) : selectedIsMissed ? (
+            )}
+
+            {/* Upcoming scheduled workout */}
+            {selectedIsUpcoming && selectedScheduled && selectedBadge && !selectedEntry && (
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#f5f3ff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                </div>
+                <div>
+                  <p style={{ fontSize: "13px", fontWeight: 500, color: "#7c3aed", margin: 0 }}>{selectedScheduled.name}</p>
+                  <p style={{ fontSize: "11px", color: "#9ca3af", margin: "1px 0 0" }}>
+                    {MONTH_NAMES[parseInt(selectedDate.split("-")[1]) - 1]} {parseInt(selectedDate.split("-")[2])} · scheduled
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Missed workout */}
+            {selectedIsMissed && !selectedEntry && (
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
                 </div>
                 <div>
                   <p style={{ fontSize: "13px", fontWeight: 500, color: "#dc2626", margin: 0 }}>Missed workout</p>
@@ -268,10 +338,15 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
                   </p>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {/* Rest / unscheduled day */}
+            {!selectedEntry && !selectedIsMissed && !selectedIsUpcoming && (
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
                 </div>
                 <div>
                   <p style={{ fontSize: "13px", fontWeight: 500, color: "#6b7280", margin: 0 }}>Rest day</p>
@@ -281,6 +356,7 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
                 </div>
               </div>
             )}
+
           </div>
         )}
 
