@@ -97,9 +97,11 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
     const isToday = s === todayStr;
     const isPast = cellDate < todayDate;
     const isFuture = cellDate > todayDate;
-    if (isToday && hasLog) return "today-done";
-    if (isToday && hasSched) return "today-sched";
-    if (isToday) return "today";
+    if (isToday) {
+      if (hasLog) return "today-done";
+      if (hasSched) return "today-sched";
+      return "today";
+    }
     if (hasLog) return "completed";
     if (isPast && hasSched) return "missed";
     if (isFuture && hasSched) return "upcoming";
@@ -133,7 +135,7 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
   const todayDate = new Date(now.year,now.month,now.date);
   const selBadge = selected ? BADGE[getDayName(new Date(parseInt(selected.split("-")[0]),parseInt(selected.split("-")[1])-1,parseInt(selected.split("-")[2])))] : null;
   const isMissed = !!(selected && !selEntry && selSched && selDate && selDate < todayDate);
-  const isUpcoming = !!(selected && !selEntry && selSched && selDate && selDate > todayDate);
+  const isUpcoming = !!(selected && !selEntry && selSched && selDate && selDate >= todayDate);
 
   const cells: (number|null)[] = [];
   for(let i=0;i<firstDay;i++) cells.push(null);
@@ -172,11 +174,11 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
             const dotC = workoutLog[s] ? DOT_COLORS[getDayName(new Date(viewYear,viewMonth,day))] : null;
             return (
               <div key={s} onClick={()=>setSelected(isSel?null:s)}
-                style={{aspectRatio:"1",borderRadius:"8px",background:bg,border:isSel?"2px solid #4f46e5":"1.5px solid transparent",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"3px",cursor:"pointer"}}>
+                style={{aspectRatio:"1",borderRadius:"8px",background:bg,border: isSel ? "2px solid #4f46e5" : ct === "today-sched" ? "1.5px solid #6366f1" : "1.5px solid transparent",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"3px",cursor:"pointer"}}>
                 <span style={{fontSize:"11px",fontWeight:500,color:num,lineHeight:1}}>{day}</span>
                 {ct==="completed" && dotC && <div style={{width:"5px",height:"5px",borderRadius:"50%",background:dotC}}/>}
                 {ct==="today-done" && <div style={{width:"5px",height:"5px",borderRadius:"50%",background:"rgba(255,255,255,0.7)"}}/>}
-                {ct==="today-sched" && <div style={{width:"5px",height:"5px",borderRadius:"50%",border:"1.5px solid rgba(255,255,255,0.6)"}}/>}
+                {ct==="today-sched" && <div style={{width:"6px",height:"6px",borderRadius:"50%",background:"rgba(255,255,255,0.9)"}}/>}
                 {ct==="upcoming" && <div style={{width:"5px",height:"5px",borderRadius:"50%",background:"#7c3aed",opacity:0.7}}/>}
                 {ct==="missed" && <div style={{width:"5px",height:"5px",borderRadius:"50%",background:"#fca5a5"}}/>}
               </div>
