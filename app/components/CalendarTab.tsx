@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type LogEntry = {
   dayName: string;
@@ -32,7 +32,6 @@ const BADGE_COLORS: Record<string, { bg: string; text: string; label: string }> 
   Sunday:    { bg: "#fafaf9", text: "#57534e", label: "SUN" },
 };
 
-// Timezone-safe local date string
 function localDateStr(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
 }
@@ -55,7 +54,6 @@ function getWeekKey(date: Date): string {
 }
 
 function loadCurrentPlan(): SavedPlan | null {
-  if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem("fitforge_plan");
     if (!raw) return null;
@@ -63,8 +61,6 @@ function loadCurrentPlan(): SavedPlan | null {
   } catch { return null; }
 }
 
-// Build a map of date -> scheduled day info from the current plan
-// Only includes days that are type "workout" in the plan
 function buildScheduledDaysMap(plan: SavedPlan | null, today: Date): Map<string, { name: string; dayName: string }> {
   const map = new Map<string, { name: string; dayName: string }>();
   if (!plan?.plan?.days) return map;
@@ -72,19 +68,16 @@ function buildScheduledDaysMap(plan: SavedPlan | null, today: Date): Map<string,
   const currentWeekKey = getWeekKey(today);
   if (plan.weekKey !== currentWeekKey) return map;
 
-  // Find Monday of current week
-  const dayOfWeek = today.getDay();
+  // Find Monday of current week using local date math
+  const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon ... 6=Sat
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + mondayOffset);
-  monday.setHours(0, 0, 0, 0);
+  const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + mondayOffset);
 
   const daysOfWeek = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 
   plan.plan.days.forEach((d, i) => {
     if (d.type === "workout") {
-      const dayDate = new Date(monday);
-      dayDate.setDate(monday.getDate() + i);
+      const dayDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
       const ds = localDateStr(dayDate);
       map.set(ds, { name: d.name || "", dayName: daysOfWeek[i] });
     }
@@ -104,7 +97,12 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(todayStr);
 
-  const savedPlan = loadCurrentPlan();
+  // Load plan after mount so localStorage is available
+  const [savedPlan, setSavedPlan] = useState<SavedPlan | null>(null);
+  useEffect(() => {
+    setSavedPlan(loadCurrentPlan());
+  }, []);
+
   const scheduledDaysMap = buildScheduledDaysMap(savedPlan, today);
 
   function prevMonth() {
@@ -147,18 +145,14 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
     return "future-empty";
   }
 
-  // Month stats
   const monthPrefix = `${viewYear}-${String(viewMonth + 1).padStart(2,"0")}`;
-  const monthWorkouts = Object.keys(workoutLog).filter(d => d.startsWith(monthPrefix));
-  const totalMonthWorkouts = monthWorkouts.length;
+  const totalMonthWorkouts = Object.keys(workoutLog).filter(d => d.startsWith(monthPrefix)).length;
 
-  // Count upcoming workouts this week
   const upcomingCount = Array.from(scheduledDaysMap.keys()).filter(ds => {
     const d = new Date(ds + "T00:00:00");
     return d > today;
   }).length;
 
-  // Streak: count backwards from today
   let streak = 0;
   const check = new Date(today);
   while (true) {
@@ -167,16 +161,23 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
     else break;
   }
 
-  // Selected day detail
   const selectedEntry = selectedDate ? workoutLog[selectedDate] : null;
   const selectedScheduled = selectedDate ? scheduledDaysMap.get(selectedDate) : null;
-  const selectedCellDate = selectedDate ? new Date(selectedDate + "T00:00:00") : null;
+  const selectedCellDate = selectedDate ? new Date(
+    parseInt(selectedDate.split("-")[0]),
+    parseInt(selectedDate.split("-")[1]) - 1,
+    parseInt(selectedDate.split("-")[2])
+  ) : null;
   const selectedDayName = selectedDate
-    ? getDayName(new Date(parseInt(selectedDate.split("-")[0]), parseInt(selectedDate.split("-")[1]) - 1, parseInt(selectedDate.split("-")[2])))
+    ? getDayName(new Date(
+        parseInt(selectedDate.split("-")[0]),
+        parseInt(selectedDate.split("-")[1]) - 1,
+        parseInt(selectedDate.split("-")[2])
+      ))
     : null;
   const selectedBadge = selectedDayName ? BADGE_COLORS[selectedDayName] : null;
-  const selectedIsMissed = selectedDate && !selectedEntry && scheduledDaysMap.has(selectedDate) && selectedCellDate && selectedCellDate < today;
-  const selectedIsUpcoming = selectedDate && !selectedEntry && scheduledDaysMap.has(selectedDate) && selectedCellDate && selectedCellDate > today;
+  const selectedIsMissed = !!(selectedDate && !selectedEntry && scheduledDaysMap.has(selectedDate) && selectedCellDate && selectedCellDate < today);
+  const selectedIsUpcoming = !!(selectedDate && !selectedEntry && scheduledDaysMap.has(selectedDate) && selectedCellDate && selectedCellDate > today);
 
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
@@ -184,14 +185,14 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
 
   function getCellStyle(type: CellType): { bg: string; numColor: string } {
     switch (type) {
-      case "completed":       return { bg: "#eef2ff", numColor: "#4338ca" };
-      case "today-completed": return { bg: "#1a1a2e", numColor: "white" };
-      case "today-scheduled": return { bg: "#1a1a2e", numColor: "white" };
-      case "today-empty":     return { bg: "#1a1a2e", numColor: "white" };
-      case "upcoming":        return { bg: "#f5f3ff", numColor: "#7c3aed" };
-      case "missed":          return { bg: "#fef2f2", numColor: "#dc2626" };
-      case "past-empty":      return { bg: "#f9fafb", numColor: "#d1d5db" };
-      case "future-empty":    return { bg: "#f9fafb", numColor: "#d1d5db" };
+      case "completed":        return { bg: "#eef2ff", numColor: "#4338ca" };
+      case "today-completed":  return { bg: "#1a1a2e", numColor: "white" };
+      case "today-scheduled":  return { bg: "#1a1a2e", numColor: "white" };
+      case "today-empty":      return { bg: "#1a1a2e", numColor: "white" };
+      case "upcoming":         return { bg: "#f5f3ff", numColor: "#7c3aed" };
+      case "missed":           return { bg: "#fef2f2", numColor: "#dc2626" };
+      case "past-empty":       return { bg: "#f9fafb", numColor: "#d1d5db" };
+      case "future-empty":     return { bg: "#f9fafb", numColor: "#d1d5db" };
     }
   }
 
@@ -234,8 +235,6 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
               <div key={ds} onClick={() => setSelectedDate(isSelected ? null : ds)}
                 style={{ aspectRatio: "1", borderRadius: "8px", background: bg, border: isSelected ? "2px solid #4f46e5" : "1.5px solid transparent", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", cursor: "pointer", transition: "border 0.15s" }}>
                 <span style={{ fontSize: "11px", fontWeight: 500, color: numColor, lineHeight: 1 }}>{day}</span>
-
-                {/* Dot indicators */}
                 {type === "completed" && dotColor && (
                   <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: dotColor }} />
                 )}
@@ -243,7 +242,7 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
                   <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "rgba(255,255,255,0.7)" }} />
                 )}
                 {type === "today-scheduled" && (
-                  <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.6)" }} />
+                  <div style={{ width: "5px", height: "5px", borderRadius: "50%", border: "1.5px solid rgba(255,255,255,0.5)", borderRadius: "50%" }} />
                 )}
                 {type === "upcoming" && (
                   <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#7c3aed", opacity: 0.6 }} />
@@ -277,7 +276,6 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
         {selectedDate && (
           <div style={{ marginTop: "12px", background: "#f9fafb", borderRadius: "12px", padding: "12px 14px", border: "1px solid #f3f4f6", animation: "fadeIn 0.2s ease" }}>
 
-            {/* Completed workout */}
             {selectedEntry && selectedBadge && (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
@@ -306,8 +304,7 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
               </>
             )}
 
-            {/* Upcoming scheduled workout */}
-            {selectedIsUpcoming && selectedScheduled && selectedBadge && !selectedEntry && (
+            {selectedIsUpcoming && selectedScheduled && !selectedEntry && (
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#f5f3ff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -323,7 +320,6 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
               </div>
             )}
 
-            {/* Missed workout */}
             {selectedIsMissed && !selectedEntry && (
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -340,7 +336,6 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
               </div>
             )}
 
-            {/* Rest / unscheduled day */}
             {!selectedEntry && !selectedIsMissed && !selectedIsUpcoming && (
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
