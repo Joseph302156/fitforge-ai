@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { getWorkoutLogs, getWorkoutPlan } from "@/lib/supabase";
 
 type LogEntry = { dayName: string; duration: string; exerciseCount: number; timeElapsed: number };
 type PlanDay = { day: string; type: string; name: string; duration?: string };
@@ -20,88 +22,73 @@ function fmtTime(s: number) {
   const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;
   return h>0?`${h}:${pad(m)}:${pad(sc)}`:`${pad(m)}:${pad(sc)}`;
 }
+function getWeekKey(date: Date) {
+  const jan4 = new Date(date.getFullYear(),0,4);
+  const dayOfYear = Math.floor((date.getTime()-new Date(date.getFullYear(),0,0).getTime())/86400000);
+  const weekNum = Math.ceil((dayOfYear+jan4.getDay())/7);
+  return `${date.getFullYear()}-W${String(weekNum).padStart(2,"0")}`;
+}
 
 export default function CalendarTab({ workoutLog }: { workoutLog: Record<string, LogEntry> }) {
-  const [now] = useState(() => {
-    const d = new Date();
-    return { year: d.getFullYear(), month: d.getMonth(), date: d.getDate(), day: d.getDay() };
-  });
+  const { data: session } = useSession();
+  const userId = session?.user?.id || session?.user?.email || "";
 
+  const [now] = useState(() => { const d=new Date(); return {year:d.getFullYear(),month:d.getMonth(),date:d.getDate(),day:d.getDay()}; });
   const todayStr = `${now.year}-${pad(now.month+1)}-${pad(now.date)}`;
   const [viewYear, setViewYear] = useState(now.year);
   const [viewMonth, setViewMonth] = useState(now.month);
   const [selected, setSelected] = useState<string|null>(todayStr);
-
-  // Scheduled days map — built entirely client-side after mount
   const [schedMap, setSchedMap] = useState<Record<string,{name:string;dayName:string}>>({});
+  const [fullLog, setFullLog] = useState<Record<string, LogEntry>>(workoutLog);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("fitforge_plan");
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      const days: PlanDay[] = parsed?.plan?.days;
+    if (!userId) return;
+    async function load() {
+      const [logs, plan] = await Promise.all([
+        getWorkoutLogs(userId),
+        getWorkoutPlan(userId, getWeekKey(new Date())),
+      ]);
+      setFullLog(logs);
+      if (!plan) return;
+      const days: PlanDay[] = (plan as any).days;
       if (!Array.isArray(days)) return;
-
-      // Find Monday of current week
-      // now.day: 0=Sun,1=Mon,...,6=Sat
-      const offset = now.day === 0 ? -6 : 1 - now.day;
-      const mondayDate = now.date + offset;
-      const monday = new Date(now.year, now.month, mondayDate);
-
-      const result: Record<string,{name:string;dayName:string}> = {};
+      const dayOfWeek = now.day;
+      const offset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(now.year, now.month, now.date + offset);
       const dayNames = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-
+      const result: Record<string,{name:string;dayName:string}> = {};
       days.forEach((d, i) => {
         if (d.type === "workout") {
           const dt = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
-          const ds = toDateStr(dt);
-          result[ds] = { name: d.name || "", dayName: dayNames[i] };
-          console.log(`scheduled: ${d.day} -> ${ds}`);
+          result[toDateStr(dt)] = { name: d.name || "", dayName: dayNames[i] };
         }
       });
-
-      console.log("schedMap built:", result);
       setSchedMap(result);
-    } catch(e) {
-      console.error("CalendarTab schedMap error:", e);
     }
-  }, []);
+    load();
+  }, [userId]);
 
-  function prevMonth() {
-    if (viewMonth===0){setViewMonth(11);setViewYear(y=>y-1);}
-    else setViewMonth(m=>m-1);
-    setSelected(null);
-  }
-  function nextMonth() {
-    if (viewMonth===11){setViewMonth(0);setViewYear(y=>y+1);}
-    else setViewMonth(m=>m+1);
-    setSelected(null);
-  }
+  function prevMonth() { if(viewMonth===0){setViewMonth(11);setViewYear(y=>y-1);}else setViewMonth(m=>m-1); setSelected(null); }
+  function nextMonth() { if(viewMonth===11){setViewMonth(0);setViewYear(y=>y+1);}else setViewMonth(m=>m+1); setSelected(null); }
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
 
-  function ds(day: number) {
-    return `${viewYear}-${pad(viewMonth+1)}-${pad(day)}`;
-  }
+  function ds(day: number) { return `${viewYear}-${pad(viewMonth+1)}-${pad(day)}`; }
 
   type CT = "completed"|"today-done"|"today-sched"|"today"|"upcoming"|"missed"|"empty";
-
   function cellType(day: number): CT {
     const s = ds(day);
     const cellDate = new Date(viewYear, viewMonth, day);
     const todayDate = new Date(now.year, now.month, now.date);
-    const hasLog = !!workoutLog[s];
+    const hasLog = !!fullLog[s];
     const hasSched = !!schedMap[s];
     const isToday = s === todayStr;
     const isPast = cellDate < todayDate;
     const isFuture = cellDate > todayDate;
-    if (isToday) {
-      if (hasLog) return "today-done";
-      if (hasSched) return "today-sched";
-      return "today";
-    }
+    if (isToday && hasLog) return "today-done";
+    if (isToday && hasSched) return "today-sched";
+    if (isToday) return "today";
     if (hasLog) return "completed";
     if (isPast && hasSched) return "missed";
     if (isFuture && hasSched) return "upcoming";
@@ -119,23 +106,21 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
   }
 
   const monthPfx = `${viewYear}-${pad(viewMonth+1)}`;
-  const monthDone = Object.keys(workoutLog).filter(d=>d.startsWith(monthPfx)).length;
-  const upcoming = Object.keys(schedMap).filter(d=>{
-    const dt = new Date(d+"T00:00:00");
-    return dt > new Date(now.year,now.month,now.date);
-  }).length;
+  const monthDone = Object.keys(fullLog).filter(d=>d.startsWith(monthPfx)).length;
+  const upcoming = Object.keys(schedMap).filter(d=>new Date(d+"T00:00:00")>new Date(now.year,now.month,now.date)).length;
 
   let streak=0;
   const sc = new Date(now.year,now.month,now.date);
-  while(workoutLog[toDateStr(sc)]){streak++;sc.setDate(sc.getDate()-1);}
+  while(fullLog[toDateStr(sc)]){streak++;sc.setDate(sc.getDate()-1);}
 
-  const selEntry = selected ? workoutLog[selected] : null;
+  const selEntry = selected ? fullLog[selected] : null;
   const selSched = selected ? schedMap[selected] : null;
   const selDate = selected ? new Date(parseInt(selected.split("-")[0]),parseInt(selected.split("-")[1])-1,parseInt(selected.split("-")[2])) : null;
   const todayDate = new Date(now.year,now.month,now.date);
   const selBadge = selected ? BADGE[getDayName(new Date(parseInt(selected.split("-")[0]),parseInt(selected.split("-")[1])-1,parseInt(selected.split("-")[2])))] : null;
   const isMissed = !!(selected && !selEntry && selSched && selDate && selDate < todayDate);
-  const isUpcoming = !!(selected && !selEntry && selSched && selDate && selDate >= todayDate);
+  const isUpcoming = !!(selected && !selEntry && selSched && selDate && selDate >= todayDate && selected !== todayStr);
+  const isTodaySched = !!(selected === todayStr && !selEntry && selSched);
 
   const cells: (number|null)[] = [];
   for(let i=0;i<firstDay;i++) cells.push(null);
@@ -149,43 +134,35 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
           {MONTH_NAMES[viewMonth]} {viewYear} · {monthDone} completed · {upcoming} upcoming
         </p>
       </div>
-
       <div style={{padding:"16px"}}>
-
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
           <button onClick={prevMonth} style={{width:"30px",height:"30px",borderRadius:"8px",border:"1px solid #e5e7eb",background:"#f9fafb",cursor:"pointer",fontSize:"14px",color:"#6b7280"}}>‹</button>
           <span style={{fontSize:"13px",fontWeight:500,color:"#1f2937"}}>{MONTH_NAMES[viewMonth]} {viewYear}</span>
           <button onClick={nextMonth} style={{width:"30px",height:"30px",borderRadius:"8px",border:"1px solid #e5e7eb",background:"#f9fafb",cursor:"pointer",fontSize:"14px",color:"#6b7280"}}>›</button>
         </div>
-
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"2px",marginBottom:"4px"}}>
           {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d=>(
             <div key={d} style={{textAlign:"center",fontSize:"10px",color:"#9ca3af",fontWeight:500,padding:"4px 0"}}>{d}</div>
           ))}
         </div>
-
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"3px"}}>
           {cells.map((day,i)=>{
             if(day===null) return <div key={`e-${i}`}/>;
-            const s = ds(day);
-            const ct = cellType(day);
-            const {bg,num} = cellStyle(ct);
-            const isSel = selected===s;
-            const dotC = workoutLog[s] ? DOT_COLORS[getDayName(new Date(viewYear,viewMonth,day))] : null;
+            const s=ds(day); const ct=cellType(day); const {bg,num}=cellStyle(ct); const isSel=selected===s;
+            const dotC = fullLog[s] ? DOT_COLORS[getDayName(new Date(viewYear,viewMonth,day))] : null;
             return (
               <div key={s} onClick={()=>setSelected(isSel?null:s)}
-                style={{aspectRatio:"1",borderRadius:"8px",background:bg,border: isSel ? "2px solid #4f46e5" : ct === "today-sched" ? "1.5px solid #6366f1" : "1.5px solid transparent",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"3px",cursor:"pointer"}}>
+                style={{aspectRatio:"1",borderRadius:"8px",background:bg,border:isSel?"2px solid #4f46e5":"1.5px solid transparent",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"3px",cursor:"pointer"}}>
                 <span style={{fontSize:"11px",fontWeight:500,color:num,lineHeight:1}}>{day}</span>
-                {ct==="completed" && dotC && <div style={{width:"5px",height:"5px",borderRadius:"50%",background:dotC}}/>}
-                {ct==="today-done" && <div style={{width:"5px",height:"5px",borderRadius:"50%",background:"rgba(255,255,255,0.7)"}}/>}
-                {ct==="today-sched" && <div style={{width:"6px",height:"6px",borderRadius:"50%",background:"rgba(255,255,255,0.9)"}}/>}
-                {ct==="upcoming" && <div style={{width:"5px",height:"5px",borderRadius:"50%",background:"#7c3aed",opacity:0.7}}/>}
-                {ct==="missed" && <div style={{width:"5px",height:"5px",borderRadius:"50%",background:"#fca5a5"}}/>}
+                {ct==="completed"&&dotC&&<div style={{width:"5px",height:"5px",borderRadius:"50%",background:dotC}}/>}
+                {ct==="today-done"&&<div style={{width:"5px",height:"5px",borderRadius:"50%",background:"rgba(255,255,255,0.7)"}}/>}
+                {ct==="today-sched"&&<div style={{width:"6px",height:"6px",borderRadius:"50%",background:"rgba(255,255,255,0.9)"}}/>}
+                {ct==="upcoming"&&<div style={{width:"5px",height:"5px",borderRadius:"50%",background:"#7c3aed",opacity:0.7}}/>}
+                {ct==="missed"&&<div style={{width:"5px",height:"5px",borderRadius:"50%",background:"#fca5a5"}}/>}
               </div>
             );
           })}
         </div>
-
         <div style={{display:"flex",gap:"10px",marginTop:"10px",flexWrap:"wrap"}}>
           {[{bg:"#eef2ff",dot:"#4f46e5",label:"Completed"},{bg:"#f5f3ff",dot:"#7c3aed",label:"Upcoming"},{bg:"#fef2f2",dot:"#fca5a5",label:"Missed"},{bg:"#f9fafb",dot:"#d1d5db",label:"Rest / none"}].map(item=>(
             <div key={item.label} style={{display:"flex",alignItems:"center",gap:"5px"}}>
@@ -196,7 +173,6 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
             </div>
           ))}
         </div>
-
         {selected && (
           <div style={{marginTop:"12px",background:"#f9fafb",borderRadius:"12px",padding:"12px 14px",border:"1px solid #f3f4f6"}}>
             {selEntry && selBadge ? (
@@ -217,14 +193,14 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
                   ))}
                 </div>
               </>
-            ) : isUpcoming && selSched ? (
+            ) : (isUpcoming || isTodaySched) && selSched ? (
               <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
                 <div style={{width:"32px",height:"32px",borderRadius:"8px",background:"#f5f3ff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 </div>
                 <div>
                   <p style={{fontSize:"13px",fontWeight:500,color:"#7c3aed",margin:0}}>{selSched.name}</p>
-                  <p style={{fontSize:"11px",color:"#9ca3af",margin:"1px 0 0"}}>{MONTH_NAMES[parseInt(selected.split("-")[1])-1]} {parseInt(selected.split("-")[2])} · scheduled</p>
+                  <p style={{fontSize:"11px",color:"#9ca3af",margin:"1px 0 0"}}>{MONTH_NAMES[parseInt(selected.split("-")[1])-1]} {parseInt(selected.split("-")[2])} · {isTodaySched ? "scheduled for today" : "scheduled"}</p>
                 </div>
               </div>
             ) : isMissed ? (
@@ -250,7 +226,6 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
             )}
           </div>
         )}
-
         <div style={{marginTop:"12px",display:"flex",gap:"8px"}}>
           <div style={{flex:1,background:"#f9fafb",border:"1px solid #f3f4f6",borderRadius:"12px",padding:"10px 12px",display:"flex",alignItems:"center",gap:"10px"}}>
             <div style={{width:"28px",height:"28px",borderRadius:"8px",background:"#fff7ed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -271,7 +246,6 @@ export default function CalendarTab({ workoutLog }: { workoutLog: Record<string,
             </div>
           </div>
         </div>
-
       </div>
     </>
   );
