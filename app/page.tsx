@@ -195,7 +195,7 @@ export default function LandingPage() {
 
 function MobilePreview() {
   return (
-    <div style={{ transform:"scale(1.8)", transformOrigin:"center center", margin:"80px 0" }}>
+    <div style={{ transform:"scale(1.6)", transformOrigin:"center center", margin:"80px 0" }}>
       <div style={{ background:"white", borderRadius:"28px", width:"280px", overflow:"hidden", border:"1px solid #e5e7eb", boxShadow:"0 20px 60px rgba(0,0,0,0.15)" }}>
 
         {/* App header */}
