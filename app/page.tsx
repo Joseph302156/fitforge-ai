@@ -130,6 +130,7 @@ export default function LandingPage() {
               )}
               {loading ? "Signing in..." : "Start for $5/month →"}
             </button>
+            <p style={{ color:"rgba(255,255,255,0.3)", fontSize:"11px", marginTop:"6px" }}>Less than $0.17/day · Cancel anytime</p>
             <a href="https://apps.apple.com" target="_blank" rel="noopener noreferrer"
               className="secondary-btn"
               style={{ display:"flex", alignItems:"center", gap:"8px", background:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.7)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:"12px", padding:"13px 20px", fontSize:"14px", fontWeight:500, cursor:"pointer", transition:"background 0.2s", textDecoration:"none" }}>
@@ -160,21 +161,6 @@ export default function LandingPage() {
                 </div>
               </div>
             ))}
-          </div>
-
-          {/* Pricing */}
-          <div style={{ background:"rgba(99,102,241,0.12)", border:"1px solid rgba(99,102,241,0.25)", borderRadius:"14px", padding:"16px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"16px" }}>
-            <div>
-              <p style={{ color:"white", fontSize:"15px", fontWeight:600, margin:"0 0 3px" }}>FitForge Pro</p>
-              <p style={{ color:"rgba(255,255,255,0.45)", fontSize:"12px" }}>Full access · Cancel anytime</p>
-            </div>
-            <div style={{ textAlign:"right", flexShrink:0 }}>
-              <div style={{ display:"flex", alignItems:"baseline", gap:"3px", justifyContent:"flex-end" }}>
-                <span style={{ color:"white", fontSize:"24px", fontWeight:700 }}>$5</span>
-                <span style={{ color:"rgba(255,255,255,0.4)", fontSize:"13px" }}>/month</span>
-              </div>
-              <p style={{ color:"rgba(255,255,255,0.3)", fontSize:"10px", marginTop:"2px" }}>Less than $0.17/day</p>
-            </div>
           </div>
 
           {/* Footer */}
