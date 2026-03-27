@@ -106,14 +106,11 @@ export default function Home() {
               <div style={{ position:"relative" }}>
                 <button
                   onClick={() => setShowUserMenu(v => !v)}
-                  style={{ width:"34px", height:"34px", borderRadius:"50%", border:"2px solid #f3f4f6", cursor:"pointer", overflow:"hidden", padding:0 }}>
-                  {session?.user?.image ? (
-                    <img src={session.user.image} alt="avatar" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-                  ) : (
-                    <div style={{ width:"100%", height:"100%", background:"#1a1a2e", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"11px", fontWeight:600, color:"white" }}>
-                      {userInitials}
-                    </div>
-                  )}
+                  style={{ width:"34px", height:"34px", borderRadius:"50%", border:"2px solid #f3f4f6", cursor:"pointer", padding:0, background:"#f3f4f6", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
                 </button>
 
                 {showUserMenu && (
