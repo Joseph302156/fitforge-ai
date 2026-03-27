@@ -122,13 +122,16 @@ export default function LandingPage() {
           {/* CTA buttons */}
           <div className="fade-up-3 cta-row" style={{ display:"flex", gap:"10px" }}>
             <button className="cta-btn" onClick={handleGetStarted} disabled={loading}
-              style={{ display:"flex", alignItems:"center", gap:"8px", background:"#4f46e5", color:"white", border:"none", borderRadius:"12px", padding:"13px 20px", fontSize:"14px", fontWeight:500, cursor:loading?"not-allowed":"pointer", transition:"background 0.2s", opacity:loading?0.8:1 }}>
-              {loading ? (
-                <div style={{ width:"16px", height:"16px", borderRadius:"50%", border:"2px solid rgba(255,255,255,0.3)", borderTopColor:"white", animation:"spin 0.8s linear infinite" }} />
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-              )}
-              {loading ? "Signing in..." : "Start for $5/month →"}
+              style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"2px", background:"#4f46e5", color:"white", border:"none", borderRadius:"12px", padding:"10px 20px", fontSize:"14px", fontWeight:500, cursor:loading?"not-allowed":"pointer", transition:"background 0.2s", opacity:loading?0.8:1 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
+                {loading ? (
+                  <div style={{ width:"16px", height:"16px", borderRadius:"50%", border:"2px solid rgba(255,255,255,0.3)", borderTopColor:"white", animation:"spin 0.8s linear infinite" }} />
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                )}
+                {loading ? "Signing in..." : "Start for $5/month →"}
+              </div>
+              {!loading && <span style={{ fontSize:"10px", fontWeight:400, color:"rgba(255,255,255,0.6)" }}>Only $0.17/day · Cancel anytime</span>}
             </button>
             <p style={{ color:"rgba(255,255,255,0.3)", fontSize:"11px", marginTop:"6px" }}>Less than $0.17/day · Cancel anytime</p>
             <a href="https://apps.apple.com" target="_blank" rel="noopener noreferrer"
