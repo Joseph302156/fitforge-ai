@@ -198,8 +198,9 @@ function EditModal({ day, onSave, onClose }: { day: Day; onSave: (d: Day) => voi
 }
 
 // ── DayCard ────────────────────────────────────────────────────────────────────
-function DayCard({ day, onEdit, onStart, isCompleted, isToday }: {
-  day: Day; onEdit: (d: Day) => void; onStart: (d: Day) => void; isCompleted: boolean; isToday: boolean;
+function DayCard({ day, onEdit, onStart, isCompleted, isToday, loggedDate }: {
+  day: Day; onEdit: (d: Day) => void; onStart: (d: Day) => void; 
+  isCompleted: boolean; isToday: boolean; loggedDate?: string;
 }) {
   const c = DAY_COLORS[day.day] || { bg:"#f9fafb", text:"#6b7280", badge:"DAY", accent:"#6366f1" };
   const [hovered, setHovered] = useState(false);
@@ -220,7 +221,7 @@ function DayCard({ day, onEdit, onStart, isCompleted, isToday }: {
           <div style={{ width:"36px", height:"36px", borderRadius:"8px", background:c.bg, color:c.text, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"10px", fontWeight:500, flexShrink:0 }}>{c.badge}</div>
           <div style={{ flex:1, minWidth:0 }}>
             <p style={{ fontSize:"12px", fontWeight:500, color:"#15803d", margin:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{day.name}</p>
-            <p style={{ fontSize:"10px", color:"#86efac", margin:"2px 0 0" }}>{day.duration} · completed today</p>
+            <p style={{ fontSize:"10px", color:"#86efac", margin:"2px 0 0" }}>{day.duration} · completed {isToday ? "today" : loggedDate ? `on ${loggedDate}` : ""}</p>
           </div>
           <div style={{ width:"28px", height:"28px", borderRadius:"50%", background:"#22c55e", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -506,15 +507,33 @@ export default function WorkoutTab({ onWorkoutComplete }: { onWorkoutComplete: (
               </div>
             )}
             <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
-              {plan.days.map(day => {
-                const isCompletedToday = day.type !== "rest" && !!workoutLog[todayStr] && workoutLog[todayStr].dayName === day.name;
+              {plan.days.map((day, i) => {
+                const daysOfWeek = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+                const dayIndex = daysOfWeek.indexOf(day.day);
+                const currentIndex = daysOfWeek.indexOf(currentDayName);
+                
+                // Calculate actual date for this plan day
+                const today = new Date();
+                const todayDow = today.getDay() === 0 ? 6 : today.getDay() - 1;
+                const diff = dayIndex - todayDow;
+                const dayDate = new Date(today);
+                dayDate.setDate(today.getDate() + diff);
+                const dayDateStr = localDateStr(dayDate);
+
+                // Check if this day's workout was completed on its actual date
+                const isCompletedOnDay = day.type !== "rest" && !!workoutLog[dayDateStr] && workoutLog[dayDateStr].dayName === day.name;
                 const isToday = day.day === currentDayName;
+                const isPast = dayIndex < currentIndex;
+
                 return (
-                  <DayCard key={day.day} day={day}
+                  <DayCard
+                    key={day.day}
+                    day={day}
                     onEdit={d => setEditDay(d)}
-                    onStart={d => { if (!isCompletedToday) setSessionDay(d); }}
-                    isCompleted={isCompletedToday}
+                    onStart={d => { if (!isCompletedOnDay) setSessionDay(d); }}
+                    isCompleted={isCompletedOnDay}
                     isToday={isToday}
+                    loggedDate={isPast && !isToday ? day.day : undefined}
                   />
                 );
               })}

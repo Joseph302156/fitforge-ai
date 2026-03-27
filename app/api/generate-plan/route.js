@@ -6,7 +6,6 @@ export async function POST(request) {
   try {
     const { goal, level, userPrompt, currentDay, pastDays } = await request.json();
 
-    console.log("=== PLAN GEN ===", { currentDay, pastDays }); // ADD THIS LINE
     const pastDaysNote = pastDays && pastDays.length > 0
       ? `CRITICAL: The user is building this plan on ${currentDay}. The days ${pastDays.join(", ")} have already passed this week. You MUST set these days to type "rest" — do not schedule any workout on them under any circumstances.`
       : `The user is starting their plan on ${currentDay || "Monday"}.`;
