@@ -195,72 +195,74 @@ export default function LandingPage() {
 
 function MobilePreview() {
   return (
-    <div style={{ background:"white", borderRadius:"28px", width:"380px", overflow:"hidden", border:"1px solid #e5e7eb", boxShadow:"0 20px 60px rgba(0,0,0,0.15)" }}>
+    <div style={{ transform:"scale(1.8)", transformOrigin:"center center", margin:"80px 0" }}>
+      <div style={{ background:"white", borderRadius:"28px", width:"280px", overflow:"hidden", border:"1px solid #e5e7eb", boxShadow:"0 20px 60px rgba(0,0,0,0.15)" }}>
 
-      {/* App header */}
-      <div style={{ background:"#1a1a2e", padding:"16px 14px 12px" }}>
-        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"10px", margin:"0 0 2px" }}>Good morning, Joseph</p>
-        <h3 style={{ color:"white", fontSize:"14px", fontWeight:500, margin:"0 0 10px" }}>Today's overview</h3>
-        <div style={{ background:"rgba(255,255,255,0.08)", borderRadius:"10px", padding:"10px", display:"flex", alignItems:"center", gap:"8px" }}>
-          <div style={{ width:"30px", height:"30px", borderRadius:"8px", background:"#eef2ff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
-              <line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
-            </svg>
-          </div>
-          <div style={{ flex:1 }}>
-            <p style={{ color:"white", fontSize:"11px", fontWeight:500, margin:0 }}>Upper body strength</p>
-            <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"9px", margin:"1px 0 0" }}>Today · 45 min · 6 exercises</p>
-          </div>
-          <div style={{ background:"#4f46e5", borderRadius:"6px", padding:"4px 8px", fontSize:"9px", color:"white", fontWeight:500 }}>Start →</div>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div style={{ padding:"12px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px" }}>
-        <div style={{ background:"#f9fafb", borderRadius:"8px", padding:"8px" }}>
-          <p style={{ fontSize:"9px", color:"#9ca3af", margin:"0 0 2px" }}>Streak</p>
-          <p style={{ fontSize:"18px", fontWeight:500, color:"#1f2937", margin:0 }}>4</p>
-          <p style={{ fontSize:"9px", color:"#9ca3af" }}>days in a row</p>
-        </div>
-        <div style={{ background:"#f9fafb", borderRadius:"8px", padding:"8px" }}>
-          <p style={{ fontSize:"9px", color:"#9ca3af", margin:"0 0 2px" }}>This week</p>
-          <p style={{ fontSize:"18px", fontWeight:500, color:"#1f2937", margin:0 }}>3<span style={{ fontSize:"11px", color:"#9ca3af" }}>/5</span></p>
-          <p style={{ fontSize:"9px", color:"#9ca3af" }}>workouts done</p>
-        </div>
-        <div style={{ background:"#eef2ff", borderRadius:"8px", padding:"8px" }}>
-          <p style={{ fontSize:"9px", color:"#4338ca", margin:"0 0 2px" }}>Calories</p>
-          <p style={{ fontSize:"18px", fontWeight:500, color:"#1e1b4b", margin:0 }}>1,840</p>
-          <p style={{ fontSize:"9px", color:"#6366f1" }}>of 2,200 today</p>
-        </div>
-        <div style={{ background:"#f0fdf4", borderRadius:"8px", padding:"8px" }}>
-          <p style={{ fontSize:"9px", color:"#15803d", margin:"0 0 2px" }}>Protein</p>
-          <p style={{ fontSize:"18px", fontWeight:500, color:"#14532d", margin:0 }}>142<span style={{ fontSize:"10px", color:"#15803d" }}>g</span></p>
-          <p style={{ fontSize:"9px", color:"#86efac" }}>of 150g goal</p>
-        </div>
-      </div>
-
-      {/* AI coach preview */}
-      <div style={{ padding:"0 12px 12px" }}>
-        <p style={{ fontSize:"9px", fontWeight:500, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.06em", margin:"0 0 6px" }}>AI coach</p>
-        <div style={{ background:"#f9fafb", borderRadius:"10px", padding:"10px" }}>
-          <div style={{ display:"flex", gap:"6px", alignItems:"flex-start", marginBottom:"6px" }}>
-            <div style={{ width:"20px", height:"20px", borderRadius:"50%", background:"#eef2ff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        {/* App header */}
+        <div style={{ background:"#1a1a2e", padding:"16px 14px 12px" }}>
+          <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"10px", margin:"0 0 2px" }}>Good morning, Joseph</p>
+          <h3 style={{ color:"white", fontSize:"14px", fontWeight:500, margin:"0 0 10px" }}>Today's overview</h3>
+          <div style={{ background:"rgba(255,255,255,0.08)", borderRadius:"10px", padding:"10px", display:"flex", alignItems:"center", gap:"8px" }}>
+            <div style={{ width:"30px", height:"30px", borderRadius:"8px", background:"#eef2ff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
+                <line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
+              </svg>
             </div>
-            <p style={{ fontSize:"10px", color:"#374151", lineHeight:1.5, background:"#f3f4f6", padding:"6px 8px", borderRadius:"10px", borderBottomLeftRadius:"2px", margin:0 }}>
-              You're crushing it! 3 workouts done this week. Upper body today — let's go! 💪
-            </p>
+            <div style={{ flex:1 }}>
+              <p style={{ color:"white", fontSize:"11px", fontWeight:500, margin:0 }}>Upper body strength</p>
+              <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"9px", margin:"1px 0 0" }}>Today · 45 min · 6 exercises</p>
+            </div>
+            <div style={{ background:"#4f46e5", borderRadius:"6px", padding:"4px 8px", fontSize:"9px", color:"white", fontWeight:500 }}>Start →</div>
           </div>
-          <div style={{ display:"flex", gap:"6px", background:"#f3f4f6", borderRadius:"8px", padding:"6px 8px", alignItems:"center" }}>
-            <p style={{ fontSize:"10px", color:"#9ca3af", flex:1, margin:0 }}>Ask anything...</p>
-            <div style={{ width:"22px", height:"22px", borderRadius:"6px", background:"#4f46e5", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </div>
+
+        {/* Stats */}
+        <div style={{ padding:"12px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px" }}>
+          <div style={{ background:"#f9fafb", borderRadius:"8px", padding:"8px" }}>
+            <p style={{ fontSize:"9px", color:"#9ca3af", margin:"0 0 2px" }}>Streak</p>
+            <p style={{ fontSize:"18px", fontWeight:500, color:"#1f2937", margin:0 }}>4</p>
+            <p style={{ fontSize:"9px", color:"#9ca3af" }}>days in a row</p>
+          </div>
+          <div style={{ background:"#f9fafb", borderRadius:"8px", padding:"8px" }}>
+            <p style={{ fontSize:"9px", color:"#9ca3af", margin:"0 0 2px" }}>This week</p>
+            <p style={{ fontSize:"18px", fontWeight:500, color:"#1f2937", margin:0 }}>3<span style={{ fontSize:"11px", color:"#9ca3af" }}>/5</span></p>
+            <p style={{ fontSize:"9px", color:"#9ca3af" }}>workouts done</p>
+          </div>
+          <div style={{ background:"#eef2ff", borderRadius:"8px", padding:"8px" }}>
+            <p style={{ fontSize:"9px", color:"#4338ca", margin:"0 0 2px" }}>Calories</p>
+            <p style={{ fontSize:"18px", fontWeight:500, color:"#1e1b4b", margin:0 }}>1,840</p>
+            <p style={{ fontSize:"9px", color:"#6366f1" }}>of 2,200 today</p>
+          </div>
+          <div style={{ background:"#f0fdf4", borderRadius:"8px", padding:"8px" }}>
+            <p style={{ fontSize:"9px", color:"#15803d", margin:"0 0 2px" }}>Protein</p>
+            <p style={{ fontSize:"18px", fontWeight:500, color:"#14532d", margin:0 }}>142<span style={{ fontSize:"10px", color:"#15803d" }}>g</span></p>
+            <p style={{ fontSize:"9px", color:"#86efac" }}>of 150g goal</p>
+          </div>
+        </div>
+
+        {/* AI coach preview */}
+        <div style={{ padding:"0 12px 12px" }}>
+          <p style={{ fontSize:"9px", fontWeight:500, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.06em", margin:"0 0 6px" }}>AI coach</p>
+          <div style={{ background:"#f9fafb", borderRadius:"10px", padding:"10px" }}>
+            <div style={{ display:"flex", gap:"6px", alignItems:"flex-start", marginBottom:"6px" }}>
+              <div style={{ width:"20px", height:"20px", borderRadius:"50%", background:"#eef2ff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <p style={{ fontSize:"10px", color:"#374151", lineHeight:1.5, background:"#f3f4f6", padding:"6px 8px", borderRadius:"10px", borderBottomLeftRadius:"2px", margin:0 }}>
+                You're crushing it! 3 workouts done this week. Upper body today — let's go! 💪
+              </p>
+            </div>
+            <div style={{ display:"flex", gap:"6px", background:"#f3f4f6", borderRadius:"8px", padding:"6px 8px", alignItems:"center" }}>
+              <p style={{ fontSize:"10px", color:"#9ca3af", flex:1, margin:0 }}>Ask anything...</p>
+              <div style={{ width:"22px", height:"22px", borderRadius:"6px", background:"#4f46e5", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
+      </div>
     </div>
   );
 }
