@@ -2,6 +2,43 @@
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 
+function FitForgeLogo({ size = 36 }: { size?: number }) {
+  const s = size, r = s * 0.25;
+  const calX=s*0.14, calY=s*0.18, calW=s*0.72, calH=s*0.62, calR=s*0.1, headerH=s*0.18;
+  const pin1X=s*0.29, pin2X=s*0.65, pinY=s*0.13, pinW=s*0.07, pinH=s*0.12, pinR=pinW/2;
+  const dotR=s*0.045;
+  const dotCols=[s*0.27,s*0.42,s*0.57,s*0.73];
+  const dotRows=[s*0.56,s*0.70,s*0.84];
+  const dotActive=[[0,0],[1,1],[2,2],[0,2]];
+  const dotGreen=[[2,1]];
+  const plateW=s*0.13, plateH=s*0.28, plateR=s*0.055;
+  const innerW=s*0.065, innerH=s*0.2, innerR=s*0.03;
+  const barY=s/2-s*0.04, barH=s*0.08, barR=barH/2;
+  const leftPlateX=s*0.08, rightPlateX=s*0.79;
+  const plateTop=s/2-plateH/2;
+  const barLeft=leftPlateX+plateW, barRight=rightPlateX;
+  return (
+    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} fill="none">
+      <rect x="0" y="0" width={s} height={s} rx={r} fill="white" stroke="#e5e7eb" strokeWidth={s*0.014}/>
+      <rect x={calX} y={calY} width={calW} height={calH} rx={calR} fill="#f9fafb" stroke="#e5e7eb" strokeWidth={s*0.012}/>
+      <rect x={calX} y={calY} width={calW} height={headerH} rx={calR} fill="#eef2ff"/>
+      <rect x={calX} y={calY+headerH*0.6} width={calW} height={headerH*0.4} fill="#eef2ff"/>
+      <rect x={pin1X} y={pinY} width={pinW} height={pinH} rx={pinR} fill="#4f46e5"/>
+      <rect x={pin2X} y={pinY} width={pinW} height={pinH} rx={pinR} fill="#4f46e5"/>
+      {dotRows.map((ry,ri)=>dotCols.map((rx2,ci)=>{
+        const isActive=dotActive.some(([c,r2])=>c===ci&&r2===ri);
+        const isGreen=dotGreen.some(([c,r2])=>c===ci&&r2===ri);
+        return <circle key={`${ri}-${ci}`} cx={rx2} cy={ry} r={dotR} fill={isGreen?"#22c55e":isActive?"#4f46e5":"#c7d2fe"}/>;
+      }))}
+      <rect x={leftPlateX} y={plateTop} width={plateW} height={plateH} rx={plateR} fill="#4f46e5"/>
+      <rect x={leftPlateX+s*0.03} y={plateTop+s*0.04} width={innerW} height={innerH} rx={innerR} fill="#6366f1"/>
+      <rect x={barLeft} y={barY} width={barRight-barLeft} height={barH} rx={barR} fill="#4f46e5"/>
+      <rect x={rightPlateX} y={plateTop} width={plateW} height={plateH} rx={plateR} fill="#4f46e5"/>
+      <rect x={rightPlateX+s*0.03} y={plateTop+s*0.04} width={innerW} height={innerH} rx={innerR} fill="#6366f1"/>
+    </svg>
+  );
+}
+
 export default function LandingPage() {
   const [loading, setLoading] = useState(false);
 
@@ -55,12 +92,7 @@ export default function LandingPage() {
 
           {/* Logo + wordmark */}
           <div className="fade-up" style={{ display:"flex", alignItems:"center", gap:"12px" }}>
-            <div style={{ width:"40px", height:"40px", borderRadius:"12px", background:"white", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
-                <line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
-              </svg>
-            </div>
+            <FitForgeLogo size={40} />
             <span style={{ color:"white", fontSize:"18px", fontWeight:700, letterSpacing:"-0.3px" }}>FitForge AI</span>
           </div>
 
