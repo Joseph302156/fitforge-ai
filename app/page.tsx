@@ -129,9 +129,9 @@ export default function LandingPage() {
                 ) : (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
                 )}
-                {loading ? "Signing in..." : "Start for $5/month →"}
+                {loading ? "Signing in..." : "Start for $3/month →"}
               </div>
-              {!loading && <span style={{ fontSize:"10px", fontWeight:400, color:"rgba(255,255,255,0.6)" }}>Only $0.17/day · Cancel anytime</span>}
+              {!loading && <span style={{ fontSize:"10px", fontWeight:400, color:"rgba(255,255,255,0.6)" }}>Only $0.10/day · Cancel anytime</span>}
             </button>
             <a href="https://apps.apple.com" target="_blank" rel="noopener noreferrer"
               className="secondary-btn"
