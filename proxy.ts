@@ -2,17 +2,30 @@ import { auth } from "@/auth";
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
-  const isOnSignIn = req.nextUrl.pathname === "/signin";
+  const { pathname } = req.nextUrl;
 
-  if (!isLoggedIn && !isOnSignIn) {
-    const signInUrl = new URL("/signin", req.nextUrl.origin);
-    return Response.redirect(signInUrl);
+  // Public routes — always accessible
+  const isPublicRoute = pathname === "/" || pathname === "/privacy" || pathname === "/terms";
+  const isSignInRoute = pathname === "/signin";
+  const isAppRoute = pathname.startsWith("/app");
+
+  // If logged in and trying to access signin page → redirect to app
+  if (isLoggedIn && isSignInRoute) {
+    return Response.redirect(new URL("/app", req.nextUrl.origin));
   }
 
-  if (isLoggedIn && isOnSignIn) {
-    const homeUrl = new URL("/", req.nextUrl.origin);
-    return Response.redirect(homeUrl);
+  // If logged in and on landing page → redirect to app
+  if (isLoggedIn && pathname === "/") {
+    return Response.redirect(new URL("/app", req.nextUrl.origin));
   }
+
+  // If NOT logged in and trying to access app → redirect to signin
+  if (!isLoggedIn && isAppRoute) {
+    return Response.redirect(new URL("/signin", req.nextUrl.origin));
+  }
+
+  // Everything else passes through
+  return;
 });
 
 export const config = {
