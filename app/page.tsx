@@ -128,7 +128,7 @@ export default function LandingPage() {
               ) : (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
               )}
-              {loading ? "Signing in..." : "Get started free"}
+              {loading ? "Signing in..." : "Start for $5/month →"}
             </button>
             <a href="https://apps.apple.com" target="_blank" rel="noopener noreferrer"
               className="secondary-btn"
@@ -195,7 +195,7 @@ export default function LandingPage() {
 
 function MobilePreview() {
   return (
-    <div style={{ background:"white", borderRadius:"28px", width:"280px", overflow:"hidden", border:"1px solid #e5e7eb", boxShadow:"0 20px 60px rgba(0,0,0,0.15)" }}>
+    <div style={{ background:"white", borderRadius:"28px", width:"380px", overflow:"hidden", border:"1px solid #e5e7eb", boxShadow:"0 20px 60px rgba(0,0,0,0.15)" }}>
 
       {/* App header */}
       <div style={{ background:"#1a1a2e", padding:"16px 14px 12px" }}>
