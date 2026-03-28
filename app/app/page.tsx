@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import dynamic from "next/dynamic";
 
@@ -7,6 +7,17 @@ const HomeTab      = dynamic(() => import("../components/HomeTab"),      { ssr: 
 const WorkoutTab   = dynamic(() => import("../components/WorkoutTab"),   { ssr: false });
 const CalendarTab  = dynamic(() => import("../components/CalendarTab"),  { ssr: false });
 const NutritionTab = dynamic(() => import("../components/NutritionTab"), { ssr: false });
+
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const check = () => setIsDesktop(window.innerWidth >= 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  return isDesktop;
+}
 
 function FitForgeLogo({ size = 36 }: { size?: number }) {
   const s = size, r = s * 0.25;
@@ -54,15 +65,17 @@ const TABS = [
 
 export default function AppPage() {
   const { data: session } = useSession();
+  const isDesktop = useIsDesktop();
   const [activeTab, setActiveTab] = useState("home");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [workoutLog, setWorkoutLog] = useState<Record<string, {
     dayName: string; duration: string; exerciseCount: number; timeElapsed: number;
-  }>>(() => {
-    if (typeof window === "undefined") return {};
-    try { return JSON.parse(localStorage.getItem("fitforge_log") || "{}"); }
-    catch { return {}; }
-  });
+  }>>({});
+
+  useEffect(() => {
+    try { setWorkoutLog(JSON.parse(localStorage.getItem("fitforge_log") || "{}")); }
+    catch { /* ignore */ }
+  }, []);
 
   function logCompletedWorkout(dayName: string, duration: string, exerciseCount: number, timeElapsed: number) {
     const today = new Date();
@@ -72,6 +85,100 @@ export default function AppPage() {
     localStorage.setItem("fitforge_log", JSON.stringify(updated));
   }
 
+  const tabContent = (
+    <div style={{ flex:1, overflowY:"auto" }}>
+      {activeTab === "home"      && <HomeTab onStartWorkout={() => setActiveTab("workout")} isDesktop={isDesktop} />}
+      {activeTab === "workout"   && <WorkoutTab onWorkoutComplete={logCompletedWorkout} isDesktop={isDesktop} />}
+      {activeTab === "calendar"  && <CalendarTab workoutLog={workoutLog} isDesktop={isDesktop} />}
+      {activeTab === "nutrition" && <NutritionTab isDesktop={isDesktop} />}
+    </div>
+  );
+
+  // ── DESKTOP LAYOUT ──────────────────────────────────────────────────────────
+  if (isDesktop) {
+    return (
+      <>
+        <style>{`
+          * { box-sizing: border-box; }
+          body { margin: 0 !important; background: #f3f4f6 !important; }
+          @keyframes slideUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+          @keyframes popIn { 0%{transform:scale(0.6);opacity:0} 70%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
+          @keyframes spin { to{transform:rotate(360deg)} }
+          @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+          @keyframes fadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+          .nav-item:hover { background: #f9fafb; }
+          .nav-item-active { background: #eef2ff !important; }
+        `}</style>
+        <div style={{ display:"flex", height:"100vh", overflow:"hidden", background:"#f3f4f6" }}>
+
+          {/* Sidebar */}
+          <div style={{ width:"220px", background:"white", borderRight:"1px solid #f3f4f6", display:"flex", flexDirection:"column", flexShrink:0 }}>
+
+            {/* Logo */}
+            <div style={{ padding:"20px 16px 16px", borderBottom:"1px solid #f3f4f6", display:"flex", alignItems:"center", gap:"10px" }}>
+              <FitForgeLogo size={34} />
+              <div>
+                <p style={{ fontSize:"13px", fontWeight:700, color:"#1a1a2e", margin:0, letterSpacing:"-0.3px" }}>FitForge AI</p>
+                <p style={{ fontSize:"10px", color:"#9ca3af", margin:0 }}>Your personal trainer</p>
+              </div>
+            </div>
+
+            {/* Nav items */}
+            <div style={{ padding:"8px 0", flex:1 }}>
+              {TABS.map(tab => (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                  className={`nav-item ${activeTab === tab.id ? "nav-item-active" : ""}`}
+                  style={{ width:"100%", display:"flex", alignItems:"center", gap:"10px", padding:"10px 16px", border:"none", background:"transparent", cursor:"pointer", fontSize:"13px", color:activeTab===tab.id?"#4f46e5":"#6b7280", fontWeight:activeTab===tab.id?500:400, borderRight:activeTab===tab.id?"2px solid #4f46e5":"2px solid transparent", transition:"all 0.15s", textAlign:"left" }}>
+                  {tab.icon(activeTab === tab.id)}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* User profile at bottom */}
+            <div style={{ padding:"12px 16px", borderTop:"1px solid #f3f4f6", position:"relative" }}>
+              <button onClick={() => setShowUserMenu(v => !v)}
+                style={{ width:"100%", display:"flex", alignItems:"center", gap:"10px", background:"transparent", border:"none", cursor:"pointer", padding:0 }}>
+                <div style={{ width:"32px", height:"32px", borderRadius:"50%", background:"#f3f4f6", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </div>
+                <div style={{ flex:1, minWidth:0, textAlign:"left" }}>
+                  <p style={{ fontSize:"12px", fontWeight:500, color:"#1f2937", margin:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{session?.user?.name}</p>
+                  <p style={{ fontSize:"10px", color:"#9ca3af", margin:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{session?.user?.email}</p>
+                </div>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+
+              {showUserMenu && (
+                <div style={{ position:"absolute", bottom:"60px", left:"12px", right:"12px", background:"white", borderRadius:"12px", border:"1px solid #f3f4f6", boxShadow:"0 4px 20px rgba(0,0,0,0.1)", padding:"6px", zIndex:100, animation:"fadeUp 0.15s ease forwards" }}>
+                  <button onClick={() => { setShowUserMenu(false); signOut({ callbackUrl:"/" }); }}
+                    style={{ width:"100%", display:"flex", alignItems:"center", gap:"8px", padding:"8px 10px", borderRadius:"8px", border:"none", background:"transparent", cursor:"pointer", fontSize:"12px", color:"#dc2626" }}
+                    onMouseEnter={e => (e.currentTarget.style.background="#fef2f2")}
+                    onMouseLeave={e => (e.currentTarget.style.background="transparent")}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Main content area */}
+          <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+            {tabContent}
+          </div>
+
+        </div>
+        {showUserMenu && <div style={{ position:"fixed", inset:0, zIndex:99 }} onClick={() => setShowUserMenu(false)} />}
+      </>
+    );
+  }
+
+  // ── MOBILE LAYOUT ────────────────────────────────────────────────────────────
   return (
     <>
       <style>{`
@@ -82,12 +189,11 @@ export default function AppPage() {
         @keyframes spin { to{transform:rotate(360deg)} }
         @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
       `}</style>
-
       <main style={{ minHeight:"100vh", background:"#f3f4f6", display:"flex", alignItems:"center", justifyContent:"center", padding:"16px" }}>
         <div style={{ width:"100%", maxWidth:"384px" }}>
           <div style={{ background:"white", borderRadius:"24px", overflow:"hidden", boxShadow:"0 1px 3px rgba(0,0,0,0.08)", border:"1px solid #f3f4f6" }}>
 
-            {/* App header */}
+            {/* Mobile header */}
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px 12px", borderBottom:"1px solid #f3f4f6" }}>
               <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
                 <FitForgeLogo size={36} />
@@ -114,7 +220,7 @@ export default function AppPage() {
                       onMouseEnter={e => (e.currentTarget.style.background="#fef2f2")}
                       onMouseLeave={e => (e.currentTarget.style.background="transparent")}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
                       </svg>
                       Sign out
                     </button>
@@ -123,7 +229,7 @@ export default function AppPage() {
               </div>
             </div>
 
-            {/* Tab bar */}
+            {/* Mobile tab bar */}
             <div style={{ display:"flex", borderBottom:"1px solid #f3f4f6" }}>
               {TABS.map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -135,21 +241,18 @@ export default function AppPage() {
               ))}
             </div>
 
-            {/* Tab content */}
+            {/* Mobile tab content */}
             <div>
-              {activeTab === "home"      && <HomeTab onStartWorkout={() => setActiveTab("workout")} />}
-              {activeTab === "workout"   && <WorkoutTab onWorkoutComplete={logCompletedWorkout} />}
-              {activeTab === "calendar"  && <CalendarTab workoutLog={workoutLog} />}
-              {activeTab === "nutrition" && <NutritionTab />}
+              {activeTab === "home"      && <HomeTab onStartWorkout={() => setActiveTab("workout")} isDesktop={false} />}
+              {activeTab === "workout"   && <WorkoutTab onWorkoutComplete={logCompletedWorkout} isDesktop={false} />}
+              {activeTab === "calendar"  && <CalendarTab workoutLog={workoutLog} isDesktop={false} />}
+              {activeTab === "nutrition" && <NutritionTab isDesktop={false} />}
             </div>
 
           </div>
         </div>
       </main>
-
-      {showUserMenu && (
-        <div style={{ position:"fixed", inset:0, zIndex:99 }} onClick={() => setShowUserMenu(false)} />
-      )}
+      {showUserMenu && <div style={{ position:"fixed", inset:0, zIndex:99 }} onClick={() => setShowUserMenu(false)} />}
     </>
   );
 }
