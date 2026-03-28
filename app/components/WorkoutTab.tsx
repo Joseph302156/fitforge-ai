@@ -245,7 +245,7 @@ export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkout
     <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
       {header(plan?"Your weekly plan":"Build your week",plan?`${goal} · ${level} · tap today's workout to start`:"Powered by AI — just describe your situation")}
       <div style={{flex:1,overflowY:"auto",padding:"32px 48px"}}>
-        <div style={{maxWidth:"700px",margin:"0 auto"}}>{loading?loadingSpinner:plan?planContent:buildContent}</div>
+        <div style={{maxWidth:"1000px",margin:"0 auto"}}>{loading?loadingSpinner:plan?planContent:buildContent}</div>
       </div>
       {editDay&&<EditModal day={editDay} onSave={d=>{updatePlan({...plan!,days:plan!.days.map(x=>x.day===d.day?d:x)});setEditDay(null);showToast("Day updated!");}} onClose={()=>setEditDay(null)}/>}
       {sessionDay&&<WorkoutSession day={sessionDay} onClose={()=>setSessionDay(null)} onDone={handleWorkoutComplete}/>}
