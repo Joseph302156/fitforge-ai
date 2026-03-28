@@ -177,10 +177,12 @@ export default function AppPage() {
             </div>
           </div>
 
-          {/* ── Main content ── */}
-          <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", fontSize:"15px" }}>
-            {tabContent}
-          </div>
+        {/* ── Main content ── */}
+        <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+            <div style={{ flex:1, display:"flex", flexDirection:"column", fontSize:"15px", zoom:"1.5", overflowY:"auto" }}>
+                {tabContent}
+            </div>
+        </div>
 
         </div>
         {showUserMenu && <div style={{ position:"fixed", inset:0, zIndex:99 }} onClick={() => setShowUserMenu(false)} />}
