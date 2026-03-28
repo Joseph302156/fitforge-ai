@@ -122,16 +122,16 @@ export default function LandingPage() {
           {/* CTA buttons */}
           <div className="fade-up-3 cta-row" style={{ display:"flex", gap:"10px" }}>
             <button className="cta-btn" onClick={handleGetStarted} disabled={loading}
-              style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"2px", background:"#4f46e5", color:"white", border:"none", borderRadius:"12px", padding:"10px 20px", fontSize:"14px", fontWeight:500, cursor:loading?"not-allowed":"pointer", transition:"background 0.2s", opacity:loading?0.8:1 }}>
+              style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"4px", background:"#4f46e5", color:"white", border:"none", borderRadius:"12px", padding:"12px 24px", fontSize:"14px", fontWeight:500, cursor:loading?"not-allowed":"pointer", transition:"background 0.2s", opacity:loading?0.8:1 }}>
               <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
                 {loading ? (
                   <div style={{ width:"16px", height:"16px", borderRadius:"50%", border:"2px solid rgba(255,255,255,0.3)", borderTopColor:"white", animation:"spin 0.8s linear infinite" }} />
                 ) : (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
                 )}
-                {loading ? "Signing in..." : "Start for $3/month →"}
+                {loading ? "Signing in..." : "Sign in"}
               </div>
-              {!loading && <span style={{ fontSize:"10px", fontWeight:400, color:"rgba(255,255,255,0.6)" }}>Only $0.10/day · Cancel anytime</span>}
+              {!loading && <span style={{ fontSize:"11px", fontWeight:400, color:"rgba(255,255,255,0.7)" }}>New users start for $3/month</span>}
             </button>
             <a href="https://apps.apple.com" target="_blank" rel="noopener noreferrer"
               className="secondary-btn"
