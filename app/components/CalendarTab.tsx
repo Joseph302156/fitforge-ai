@@ -192,12 +192,15 @@ export default function CalendarTab({ workoutLog: propLog, isDesktop }: { workou
         <p style={{color:"rgba(255,255,255,0.4)",fontSize:"12px",margin:0}}>{MONTH_NAMES[viewMonth]} {viewYear} · {monthDone} completed · {upcoming} upcoming</p>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 340px",gap:"24px",alignItems:"start"}}>
-          <div style={{background:"white",borderRadius:"16px",border:"1px solid #f3f4f6",padding:"20px"}}><CalendarGrid/><StatsRow/></div>
-          <div style={{background:"white",borderRadius:"16px",border:"1px solid #f3f4f6",padding:"20px"}}>
-            <p style={{fontSize:"11px",fontWeight:500,color:"#9ca3af",textTransform:"uppercase",letterSpacing:"0.06em",margin:"0 0 12px"}}>Selected day</p>
-            {selected?<DetailCard/>:<p style={{fontSize:"12px",color:"#9ca3af",textAlign:"center",padding:"20px 0"}}>Click a day to see details</p>}
-          </div>
+        <div style={{background:"white",borderRadius:"16px",border:"1px solid #f3f4f6",padding:"28px"}}>
+            <CalendarGrid/>
+            {selected && (
+                <>
+                    <div style={{height:"1px",background:"#f3f4f6",margin:"20px 0"}}/>
+                    <DetailCard/>
+                </>
+            )}
+            <StatsRow/>
         </div>
       </div>
     </div>
