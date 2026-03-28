@@ -57,10 +57,10 @@ function FitForgeLogo({ size = 36 }: { size?: number }) {
 }
 
 const TABS = [
-  { id:"home", label:"Home", icon:(a:boolean)=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-  { id:"workout", label:"Workout", icon:(a:boolean)=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg> },
-  { id:"calendar", label:"Calendar", icon:(a:boolean)=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
-  { id:"nutrition", label:"Nutrition", icon:(a:boolean)=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg> },
+  { id:"home", label:"Home", icon:(a:boolean)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
+  { id:"workout", label:"Workout", icon:(a:boolean)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg> },
+  { id:"calendar", label:"Calendar", icon:(a:boolean)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
+  { id:"nutrition", label:"Nutrition", icon:(a:boolean)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg> },
 ];
 
 export default function AppPage() {
@@ -100,64 +100,74 @@ export default function AppPage() {
       <>
         <style>{`
           * { box-sizing: border-box; }
-          body { margin: 0 !important; background: #f3f4f6 !important; }
+          body { margin: 0 !important; background: #f3f4f6 !important; font-size: 16px; }
           @keyframes slideUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
           @keyframes popIn { 0%{transform:scale(0.6);opacity:0} 70%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
           @keyframes spin { to{transform:rotate(360deg)} }
           @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
           @keyframes fadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-          .nav-item:hover { background: #f9fafb; }
-          .nav-item-active { background: #eef2ff !important; }
+          .nav-btn { transition: background 0.15s; }
+          .nav-btn:hover { background: #f9fafb !important; }
         `}</style>
+
         <div style={{ display:"flex", height:"100vh", overflow:"hidden", background:"#f3f4f6" }}>
 
-          {/* Sidebar */}
-          <div style={{ width:"220px", background:"white", borderRight:"1px solid #f3f4f6", display:"flex", flexDirection:"column", flexShrink:0 }}>
+          {/* ── Sidebar — wider at 260px ── */}
+          <div style={{ width:"260px", background:"white", borderRight:"1px solid #f3f4f6", display:"flex", flexDirection:"column", flexShrink:0 }}>
 
             {/* Logo */}
-            <div style={{ padding:"20px 16px 16px", borderBottom:"1px solid #f3f4f6", display:"flex", alignItems:"center", gap:"10px" }}>
-              <FitForgeLogo size={34} />
+            <div style={{ padding:"24px 20px 20px", borderBottom:"1px solid #f3f4f6", display:"flex", alignItems:"center", gap:"12px" }}>
+              <FitForgeLogo size={40} />
               <div>
-                <p style={{ fontSize:"13px", fontWeight:700, color:"#1a1a2e", margin:0, letterSpacing:"-0.3px" }}>FitForge AI</p>
-                <p style={{ fontSize:"10px", color:"#9ca3af", margin:0 }}>Your personal trainer</p>
+                <p style={{ fontSize:"16px", fontWeight:700, color:"#1a1a2e", margin:0, letterSpacing:"-0.3px" }}>FitForge AI</p>
+                <p style={{ fontSize:"12px", color:"#9ca3af", margin:0 }}>Your personal trainer</p>
               </div>
             </div>
 
-            {/* Nav items */}
-            <div style={{ padding:"8px 0", flex:1 }}>
+            {/* Nav */}
+            <div style={{ padding:"12px 0", flex:1 }}>
               {TABS.map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className={`nav-item ${activeTab === tab.id ? "nav-item-active" : ""}`}
-                  style={{ width:"100%", display:"flex", alignItems:"center", gap:"10px", padding:"10px 16px", border:"none", background:"transparent", cursor:"pointer", fontSize:"13px", color:activeTab===tab.id?"#4f46e5":"#6b7280", fontWeight:activeTab===tab.id?500:400, borderRight:activeTab===tab.id?"2px solid #4f46e5":"2px solid transparent", transition:"all 0.15s", textAlign:"left" }}>
+                  className="nav-btn"
+                  style={{
+                    width:"100%", display:"flex", alignItems:"center", gap:"12px",
+                    padding:"13px 20px", border:"none",
+                    background: activeTab === tab.id ? "#eef2ff" : "transparent",
+                    cursor:"pointer", fontSize:"15px",
+                    color: activeTab === tab.id ? "#4f46e5" : "#6b7280",
+                    fontWeight: activeTab === tab.id ? 500 : 400,
+                    borderRight: activeTab === tab.id ? "3px solid #4f46e5" : "3px solid transparent",
+                    textAlign:"left",
+                  }}>
                   {tab.icon(activeTab === tab.id)}
                   {tab.label}
                 </button>
               ))}
             </div>
 
-            {/* User profile at bottom */}
-            <div style={{ padding:"12px 16px", borderTop:"1px solid #f3f4f6", position:"relative" }}>
+            {/* User profile */}
+            <div style={{ padding:"16px 20px", borderTop:"1px solid #f3f4f6", position:"relative" }}>
               <button onClick={() => setShowUserMenu(v => !v)}
-                style={{ width:"100%", display:"flex", alignItems:"center", gap:"10px", background:"transparent", border:"none", cursor:"pointer", padding:0 }}>
-                <div style={{ width:"32px", height:"32px", borderRadius:"50%", background:"#f3f4f6", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                style={{ width:"100%", display:"flex", alignItems:"center", gap:"12px", background:"transparent", border:"none", cursor:"pointer", padding:0 }}>
+                <div style={{ width:"36px", height:"36px", borderRadius:"50%", background:"#f3f4f6", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                   </svg>
                 </div>
                 <div style={{ flex:1, minWidth:0, textAlign:"left" }}>
-                  <p style={{ fontSize:"12px", fontWeight:500, color:"#1f2937", margin:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{session?.user?.name}</p>
-                  <p style={{ fontSize:"10px", color:"#9ca3af", margin:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{session?.user?.email}</p>
+                  <p style={{ fontSize:"14px", fontWeight:500, color:"#1f2937", margin:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{session?.user?.name}</p>
+                  <p style={{ fontSize:"12px", color:"#9ca3af", margin:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{session?.user?.email}</p>
                 </div>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
 
               {showUserMenu && (
-                <div style={{ position:"absolute", bottom:"60px", left:"12px", right:"12px", background:"white", borderRadius:"12px", border:"1px solid #f3f4f6", boxShadow:"0 4px 20px rgba(0,0,0,0.1)", padding:"6px", zIndex:100, animation:"fadeUp 0.15s ease forwards" }}>
+                <div style={{ position:"absolute", bottom:"70px", left:"12px", right:"12px", background:"white", borderRadius:"12px", border:"1px solid #f3f4f6", boxShadow:"0 4px 20px rgba(0,0,0,0.1)", padding:"6px", zIndex:100, animation:"fadeUp 0.15s ease forwards" }}>
                   <button onClick={() => { setShowUserMenu(false); signOut({ callbackUrl:"/" }); }}
-                    style={{ width:"100%", display:"flex", alignItems:"center", gap:"8px", padding:"8px 10px", borderRadius:"8px", border:"none", background:"transparent", cursor:"pointer", fontSize:"12px", color:"#dc2626" }}
+                    style={{ width:"100%", display:"flex", alignItems:"center", gap:"10px", padding:"10px 12px", borderRadius:"8px", border:"none", background:"transparent", cursor:"pointer", fontSize:"14px", color:"#dc2626" }}
                     onMouseEnter={e => (e.currentTarget.style.background="#fef2f2")}
                     onMouseLeave={e => (e.currentTarget.style.background="transparent")}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
                     </svg>
                     Sign out
@@ -167,8 +177,8 @@ export default function AppPage() {
             </div>
           </div>
 
-          {/* Main content area */}
-          <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+          {/* ── Main content ── */}
+          <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", fontSize:"15px" }}>
             {tabContent}
           </div>
 
@@ -220,7 +230,7 @@ export default function AppPage() {
                       onMouseEnter={e => (e.currentTarget.style.background="#fef2f2")}
                       onMouseLeave={e => (e.currentTarget.style.background="transparent")}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
                       </svg>
                       Sign out
                     </button>
@@ -241,7 +251,7 @@ export default function AppPage() {
               ))}
             </div>
 
-            {/* Mobile tab content */}
+            {/* Mobile content */}
             <div>
               {activeTab === "home"      && <HomeTab onStartWorkout={() => setActiveTab("workout")} isDesktop={false} />}
               {activeTab === "workout"   && <WorkoutTab onWorkoutComplete={logCompletedWorkout} isDesktop={false} />}
