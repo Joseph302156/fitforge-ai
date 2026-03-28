@@ -179,7 +179,7 @@ export default function AppPage() {
 
         {/* ── Main content ── */}
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-            <div style={{ flex:1, display:"flex", flexDirection:"column", fontSize:"15px", zoom:"1.5", overflowY:"auto" }}>
+            <div style={{ flex:1, display:"flex", flexDirection:"column", fontSize:"15px", zoom:"1.25", overflowY:"auto" }}>
                 {tabContent}
             </div>
         </div>
