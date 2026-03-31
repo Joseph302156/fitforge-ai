@@ -105,7 +105,7 @@ function PhoneContent() {
   );
 }
 
-function PhoneFrame({ width=260, height=564 }: { width?: number; height?: number }) {
+function PhoneFrame({ width=450, height=976 }: { width?: number; height?: number }) {
   return (
     <div style={{ width:`${width}px`, height:`${height}px`, borderRadius:"32px", overflow:"hidden", border:"6px solid #0f0f1e", boxShadow:"0 0 0 2px rgba(255,255,255,0.08), 0 24px 60px rgba(0,0,0,0.4)", flexShrink:0, background:"white", display:"flex", flexDirection:"column" }}>
       {/* Status bar */}
