@@ -39,6 +39,105 @@ function FitForgeLogo({ size = 36 }: { size?: number }) {
   );
 }
 
+function DumbbellIcon({ size = 16, color = "#4f46e5" }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="6" width="4" height="12" rx="1"/>
+      <rect x="18" y="6" width="4" height="12" rx="1"/>
+      <line x1="6" y1="12" x2="18" y2="12" strokeWidth="3"/>
+      <line x1="6" y1="8" x2="6" y2="16" strokeWidth="1.5"/>
+      <line x1="18" y1="8" x2="18" y2="16" strokeWidth="1.5"/>
+    </svg>
+  );
+}
+
+function PhonePreview() {
+  return (
+    <div style={{ width:"300px", height:"650px", borderRadius:"32px", overflow:"hidden", border:"6px solid #0f0f1e", boxShadow:"0 0 0 2px rgba(255,255,255,0.08), 0 24px 60px rgba(0,0,0,0.4)", flexShrink:0, background:"white", display:"flex", flexDirection:"column" }}>
+
+      {/* Status bar */}
+      <div style={{ background:"#1a1a2e", height:"14px", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+        <div style={{ width:"56px", height:"4px", borderRadius:"2px", background:"rgba(255,255,255,0.15)" }}/>
+      </div>
+
+      {/* App header */}
+      <div style={{ background:"#1a1a2e", padding:"10px 12px 8px", flexShrink:0 }}>
+        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"8px", margin:"0 0 1px" }}>Good morning, Joseph</p>
+        <p style={{ color:"white", fontSize:"12px", fontWeight:500, margin:"0 0 8px" }}>Today's overview</p>
+        <div style={{ background:"rgba(255,255,255,0.08)", borderRadius:"8px", padding:"8px 10px", display:"flex", alignItems:"center", gap:"7px" }}>
+          <div style={{ width:"24px", height:"24px", borderRadius:"6px", background:"#eef2ff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            <DumbbellIcon size={11} color="#4f46e5"/>
+          </div>
+          <div style={{ flex:1 }}>
+            <p style={{ color:"white", fontSize:"9px", fontWeight:500, margin:0 }}>Upper body strength</p>
+            <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"7px", margin:"1px 0 0" }}>Today · 45 min · 6 exercises</p>
+          </div>
+          <div style={{ background:"#4f46e5", borderRadius:"5px", padding:"3px 7px", fontSize:"7px", color:"white", fontWeight:500 }}>Start →</div>
+        </div>
+      </div>
+
+      {/* Stats grid */}
+      <div style={{ padding:"8px 10px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"5px", flexShrink:0 }}>
+        <div style={{ background:"#f9fafb", borderRadius:"7px", padding:"7px" }}><p style={{ fontSize:"7px", color:"#9ca3af", margin:"0 0 1px" }}>Streak</p><p style={{ fontSize:"15px", fontWeight:500, color:"#1f2937", margin:0 }}>4</p><p style={{ fontSize:"7px", color:"#9ca3af" }}>days in a row</p></div>
+        <div style={{ background:"#f9fafb", borderRadius:"7px", padding:"7px" }}><p style={{ fontSize:"7px", color:"#9ca3af", margin:"0 0 1px" }}>This week</p><p style={{ fontSize:"15px", fontWeight:500, color:"#1f2937", margin:0 }}>3<span style={{ fontSize:"9px", color:"#9ca3af" }}>/5</span></p><p style={{ fontSize:"7px", color:"#9ca3af" }}>workouts done</p></div>
+        <div style={{ background:"#eef2ff", borderRadius:"7px", padding:"7px" }}><p style={{ fontSize:"7px", color:"#4338ca", margin:"0 0 1px" }}>Calories</p><p style={{ fontSize:"15px", fontWeight:500, color:"#1e1b4b", margin:0 }}>1,840</p><p style={{ fontSize:"7px", color:"#6366f1" }}>of 2,200</p></div>
+        <div style={{ background:"#f0fdf4", borderRadius:"7px", padding:"7px" }}><p style={{ fontSize:"7px", color:"#15803d", margin:"0 0 1px" }}>Protein</p><p style={{ fontSize:"15px", fontWeight:500, color:"#14532d", margin:0 }}>142<span style={{ fontSize:"8px", color:"#15803d" }}>g</span></p><p style={{ fontSize:"7px", color:"#86efac" }}>of 150g</p></div>
+      </div>
+
+      {/* Week plan strip */}
+      <div style={{ padding:"0 10px 8px", flexShrink:0 }}>
+        <p style={{ fontSize:"7px", fontWeight:500, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.05em", margin:"0 0 5px" }}>Rest of the week</p>
+        <div style={{ display:"flex", flexDirection:"column", gap:"4px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:"7px", padding:"6px 8px", background:"#f0fdf4", borderRadius:"7px", border:"1px solid #bbf7d0" }}>
+            <div style={{ width:"22px", height:"22px", borderRadius:"5px", background:"#f0fdf4", border:"1px solid #bbf7d0", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"6px", fontWeight:700, color:"#15803d", flexShrink:0 }}>THU</div>
+            <div style={{ flex:1 }}><p style={{ fontSize:"8px", fontWeight:500, color:"#15803d", margin:0 }}>Lower body strength</p><p style={{ fontSize:"7px", color:"#86efac", margin:0 }}>Completed</p></div>
+            <div style={{ width:"14px", height:"14px", borderRadius:"50%", background:"#22c55e", display:"flex", alignItems:"center", justifyContent:"center" }}><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:"7px", padding:"6px 8px", background:"#eef2ff", borderRadius:"7px", border:"1px solid #c7d2fe" }}>
+            <div style={{ width:"22px", height:"22px", borderRadius:"5px", background:"#eef2ff", border:"1px solid #c7d2fe", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"6px", fontWeight:700, color:"#4338ca", flexShrink:0 }}>FRI</div>
+            <div style={{ flex:1 }}><p style={{ fontSize:"8px", fontWeight:500, color:"#4338ca", margin:0 }}>Upper body strength</p><p style={{ fontSize:"7px", color:"#6366f1", margin:0 }}>Today</p></div>
+            <div style={{ background:"#4f46e5", borderRadius:"4px", padding:"2px 5px", fontSize:"6px", color:"white", fontWeight:500 }}>Today</div>
+          </div>
+        </div>
+      </div>
+
+      {/* AI Coach */}
+      <div style={{ padding:"0 10px", flex:1, minHeight:0 }}>
+        <p style={{ fontSize:"7px", fontWeight:500, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.05em", margin:"0 0 5px" }}>AI coach</p>
+        <div style={{ background:"#f9fafb", borderRadius:"8px", padding:"8px" }}>
+          <div style={{ display:"flex", gap:"5px", alignItems:"flex-start", marginBottom:"5px" }}>
+            <div style={{ width:"16px", height:"16px", borderRadius:"50%", background:"#eef2ff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <p style={{ fontSize:"8px", color:"#374151", lineHeight:1.5, background:"#f3f4f6", padding:"5px 7px", borderRadius:"8px", borderBottomLeftRadius:"2px", margin:0 }}>You're crushing it! 3 workouts done. Upper body today 💪</p>
+          </div>
+          <div style={{ display:"flex", gap:"5px", background:"#f3f4f6", borderRadius:"6px", padding:"5px 7px", alignItems:"center" }}>
+            <p style={{ fontSize:"8px", color:"#9ca3af", flex:1, margin:0 }}>Ask anything...</p>
+            <div style={{ width:"16px", height:"16px", borderRadius:"4px", background:"#4f46e5", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom tab bar */}
+      <div style={{ display:"flex", borderTop:"1px solid #f3f4f6", background:"white", padding:"6px 0 8px", flexShrink:0 }}>
+        {[
+          { label:"Home", icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>, active:true },
+          { label:"Workout", icon:<DumbbellIcon size={14} color="#9ca3af"/>, active:false },
+          { label:"Calendar", icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>, active:false },
+          { label:"Nutrition", icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>, active:false },
+        ].map(tab=>(
+          <div key={tab.label} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:"2px" }}>
+            {tab.icon}
+            <span style={{ fontSize:"6px", color:tab.active?"#4f46e5":"#9ca3af", fontWeight:500 }}>{tab.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage() {
   const [loading, setLoading] = useState(false);
 
@@ -61,27 +160,22 @@ export default function LandingPage() {
         .secondary-btn:hover { background: rgba(255,255,255,0.12) !important; }
         .feature-card:hover { background: rgba(255,255,255,0.07) !important; }
 
-        /* Mobile: single column */
+        /* Mobile */
         .layout { display: flex; flex-direction: column; min-height: 100vh; }
-        .left-panel { padding: 40px 24px 32px; display: flex; flex-direction: column; gap: 32px; }
-        .right-panel { display: none; }
-        .hero-title { font-size: 32px; }
+        .left-panel { padding: 36px 22px 28px; display: flex; flex-direction: column; gap: 22px; }
+        .right-panel { display: flex; flex-direction: column; align-items: center; padding: 32px 22px 40px; border-top: 1px solid rgba(255,255,255,0.08); }
         .cta-row { flex-direction: column; }
-        .cta-btn { width: 100%; justify-content: center; }
+        .cta-btn { width: 100%; }
         .secondary-btn { width: 100%; justify-content: center; }
-        .mobile-phone { display: block; }
-        .stats-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
-        /* Desktop: two columns */
+        /* Desktop */
         @media (min-width: 900px) {
           .layout { flex-direction: row; }
           .left-panel { flex: 1; padding: 60px 48px; justify-content: center; max-width: 560px; }
-          .right-panel { display: flex; flex: 1; background: #f3f4f6; align-items: center; justify-content: center; padding: 32px; min-height: 100vh; }
-          .hero-title { font-size: 42px; }
+          .right-panel { display: flex !important; flex-direction: column; flex: 1; background: #f3f4f6; align-items: center; justify-content: center; padding: 40px 32px; min-height: 100vh; border-top: none; }
           .cta-row { flex-direction: row; }
           .cta-btn { width: auto; }
           .secondary-btn { width: auto; }
-          .mobile-phone { display: none; }
         }
       `}</style>
 
@@ -90,19 +184,19 @@ export default function LandingPage() {
         {/* ── Left panel ── */}
         <div className="left-panel">
 
-          {/* Logo + wordmark */}
+          {/* Logo */}
           <div className="fade-up" style={{ display:"flex", alignItems:"center", gap:"12px" }}>
             <FitForgeLogo size={40} />
             <span style={{ color:"white", fontSize:"18px", fontWeight:700, letterSpacing:"-0.3px" }}>FitForge AI</span>
           </div>
 
           {/* Hero */}
-          <div className="fade-up-2" style={{ display:"flex", flexDirection:"column", gap:"16px" }}>
-            <h1 className="hero-title" style={{ color:"white", fontWeight:700, lineHeight:1.15, letterSpacing:"-1px" }}>
+          <div className="fade-up-2" style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
+            <h1 style={{ color:"white", fontSize:"32px", fontWeight:700, lineHeight:1.15, letterSpacing:"-1px" }}>
               Your AI personal<br/>
               <span style={{ color:"#6366f1" }}>trainer</span>, in your pocket
             </h1>
-            <p style={{ color:"rgba(255,255,255,0.5)", fontSize:"15px", lineHeight:1.7, maxWidth:"440px" }}>
+            <p style={{ color:"rgba(255,255,255,0.5)", fontSize:"14px", lineHeight:1.7, maxWidth:"420px" }}>
               AI-generated workout plans, smart nutrition tracking, and a personal coach that knows your goals — all for less than a cup of coffee a week.
             </p>
 
@@ -115,142 +209,80 @@ export default function LandingPage() {
                   </div>
                 ))}
               </div>
-              <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"12px" }}>Join hundreds of users already training smarter</p>
+              <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"12px" }}>Join hundreds already training smarter</p>
             </div>
           </div>
 
-          {/* CTA buttons */}
+          {/* CTA */}
           <div className="fade-up-3 cta-row" style={{ display:"flex", gap:"10px" }}>
             <button className="cta-btn" onClick={handleGetStarted} disabled={loading}
-              style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"4px", background:"#4f46e5", color:"white", border:"none", borderRadius:"12px", padding:"12px 24px", fontSize:"14px", fontWeight:500, cursor:loading?"not-allowed":"pointer", transition:"background 0.2s", opacity:loading?0.8:1 }}>
+              style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"3px", background:"#4f46e5", color:"white", border:"none", borderRadius:"12px", padding:"11px 22px", fontSize:"14px", fontWeight:500, cursor:loading?"not-allowed":"pointer", transition:"background 0.2s", opacity:loading?0.8:1 }}>
               <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
                 {loading ? (
                   <div style={{ width:"16px", height:"16px", borderRadius:"50%", border:"2px solid rgba(255,255,255,0.3)", borderTopColor:"white", animation:"spin 0.8s linear infinite" }} />
                 ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
                 )}
                 {loading ? "Signing in..." : "Sign in"}
               </div>
-              {!loading && <span style={{ fontSize:"11px", fontWeight:400, color:"rgba(255,255,255,0.7)" }}>New users start for $3/month</span>}
+              {!loading && <span style={{ fontSize:"11px", fontWeight:400, color:"rgba(255,255,255,0.6)" }}>New users start for $3/month</span>}
             </button>
-            <a href="https://apps.apple.com" target="_blank" rel="noopener noreferrer"
-              className="secondary-btn"
-              style={{ display:"flex", alignItems:"center", gap:"8px", background:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.7)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:"12px", padding:"13px 20px", fontSize:"14px", fontWeight:500, cursor:"pointer", transition:"background 0.2s", textDecoration:"none" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M12 8v4l3 3"/></svg>
+            <a href="https://apps.apple.com" target="_blank" rel="noopener noreferrer" className="secondary-btn"
+              style={{ display:"flex", alignItems:"center", gap:"8px", background:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.7)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:"12px", padding:"11px 22px", fontSize:"14px", fontWeight:500, cursor:"pointer", transition:"background 0.2s", textDecoration:"none" }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M12 8v4l3 3"/></svg>
               Download app
             </a>
           </div>
 
-          {/* Mobile phone preview — only on small screens */}
-          <div className="mobile-phone">
-            <MobilePreview />
-          </div>
-
           {/* Features */}
-          <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:"7px" }}>
             {[
-              { icon:"⚡", title:"AI workout planner", desc:"Personalized weekly plans built around your schedule, equipment, and goals" },
-              { icon:"🥗", title:"Nutrition tracking with AI", desc:"Describe your meal in plain English — AI calculates calories and macros instantly" },
-              { icon:"💬", title:"Personal AI coach", desc:"Ask anything — form tips, meal advice, workout tutorials, motivation" },
-              { icon:"📅", title:"Monthly progress calendar", desc:"See your completed workouts, streaks, and upcoming sessions at a glance" },
+              { icon:"⚡", title:"AI workout planner", desc:"Personalized weekly plans built around your schedule and goals" },
+              { icon:"🥗", title:"Nutrition tracking with AI", desc:"Describe your meal — AI calculates calories and macros instantly" },
+              { icon:"💬", title:"Personal AI coach", desc:"Ask anything — form tips, meal advice, workout tutorials" },
+              { icon:"📅", title:"Monthly progress calendar", desc:"See your completed workouts, streaks, and upcoming sessions" },
             ].map(f => (
               <div key={f.title} className="feature-card"
-                style={{ display:"flex", alignItems:"flex-start", gap:"12px", padding:"12px", borderRadius:"12px", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.06)", transition:"background 0.2s" }}>
-                <span style={{ fontSize:"18px", flexShrink:0, marginTop:"1px" }}>{f.icon}</span>
+                style={{ display:"flex", alignItems:"flex-start", gap:"12px", padding:"11px 14px", borderRadius:"12px", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.07)", transition:"background 0.2s" }}>
+                <span style={{ fontSize:"16px", flexShrink:0, marginTop:"1px" }}>{f.icon}</span>
                 <div>
-                  <p style={{ color:"white", fontSize:"13px", fontWeight:500, margin:"0 0 3px" }}>{f.title}</p>
-                  <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"12px", lineHeight:1.5 }}>{f.desc}</p>
+                  <p style={{ color:"white", fontSize:"13px", fontWeight:500, margin:"0 0 2px" }}>{f.title}</p>
+                  <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"11px", lineHeight:1.5 }}>{f.desc}</p>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Footer */}
+          {/* Footer — desktop only */}
           <p style={{ color:"rgba(255,255,255,0.2)", fontSize:"11px" }}>
             © 2026 FitForge AI · <a href="/privacy" style={{ color:"rgba(255,255,255,0.3)", textDecoration:"none" }}>Privacy policy</a> · <a href="/terms" style={{ color:"rgba(255,255,255,0.3)", textDecoration:"none" }}>Terms</a>
           </p>
         </div>
 
-        {/* ── Right panel (desktop only) ── */}
+        {/* ── Right panel ── */}
         <div className="right-panel">
-          <MobilePreview />
+
+          {/* Mobile: App preview label */}
+          <div style={{ width:"100%", maxWidth:"280px", marginBottom:"16px" }} className="desktop-hide">
+            <p style={{ color:"rgba(255,255,255,0.35)", fontSize:"10px", fontWeight:500, textTransform:"uppercase", letterSpacing:"0.1em", margin:"0 0 4px" }}>App preview</p>
+            <p style={{ color:"white", fontSize:"16px", fontWeight:500, margin:0, letterSpacing:"-0.3px" }}>See what's inside</p>
+          </div>
+
+          <PhonePreview />
+
+          {/* Mobile: footer below preview */}
+          <div style={{ marginTop:"28px", textAlign:"center" }} className="desktop-hide">
+            <p style={{ color:"rgba(255,255,255,0.2)", fontSize:"11px", margin:0 }}>
+              © 2026 FitForge AI · <a href="/privacy" style={{ color:"rgba(255,255,255,0.3)", textDecoration:"none" }}>Privacy policy</a> · <a href="/terms" style={{ color:"rgba(255,255,255,0.3)", textDecoration:"none" }}>Terms</a>
+            </p>
+          </div>
         </div>
 
       </div>
+
+      <style>{`
+        @media (min-width: 900px) { .desktop-hide { display: none !important; } }
+      `}</style>
     </>
-  );
-}
-
-function MobilePreview() {
-  return (
-    <div style={{ transform:"scale(1.6)", transformOrigin:"center center", margin:"80px 0" }}>
-      <div style={{ background:"white", borderRadius:"28px", width:"280px", overflow:"hidden", border:"1px solid #e5e7eb", boxShadow:"0 20px 60px rgba(0,0,0,0.15)" }}>
-
-        {/* App header */}
-        <div style={{ background:"#1a1a2e", padding:"16px 14px 12px" }}>
-          <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"10px", margin:"0 0 2px" }}>Good morning, Joseph</p>
-          <h3 style={{ color:"white", fontSize:"14px", fontWeight:500, margin:"0 0 10px" }}>Today's overview</h3>
-          <div style={{ background:"rgba(255,255,255,0.08)", borderRadius:"10px", padding:"10px", display:"flex", alignItems:"center", gap:"8px" }}>
-            <div style={{ width:"30px", height:"30px", borderRadius:"8px", background:"#eef2ff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
-                <line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
-              </svg>
-            </div>
-            <div style={{ flex:1 }}>
-              <p style={{ color:"white", fontSize:"11px", fontWeight:500, margin:0 }}>Upper body strength</p>
-              <p style={{ color:"rgba(255,255,255,0.4)", fontSize:"9px", margin:"1px 0 0" }}>Today · 45 min · 6 exercises</p>
-            </div>
-            <div style={{ background:"#4f46e5", borderRadius:"6px", padding:"4px 8px", fontSize:"9px", color:"white", fontWeight:500 }}>Start →</div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div style={{ padding:"12px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px" }}>
-          <div style={{ background:"#f9fafb", borderRadius:"8px", padding:"8px" }}>
-            <p style={{ fontSize:"9px", color:"#9ca3af", margin:"0 0 2px" }}>Streak</p>
-            <p style={{ fontSize:"18px", fontWeight:500, color:"#1f2937", margin:0 }}>4</p>
-            <p style={{ fontSize:"9px", color:"#9ca3af" }}>days in a row</p>
-          </div>
-          <div style={{ background:"#f9fafb", borderRadius:"8px", padding:"8px" }}>
-            <p style={{ fontSize:"9px", color:"#9ca3af", margin:"0 0 2px" }}>This week</p>
-            <p style={{ fontSize:"18px", fontWeight:500, color:"#1f2937", margin:0 }}>3<span style={{ fontSize:"11px", color:"#9ca3af" }}>/5</span></p>
-            <p style={{ fontSize:"9px", color:"#9ca3af" }}>workouts done</p>
-          </div>
-          <div style={{ background:"#eef2ff", borderRadius:"8px", padding:"8px" }}>
-            <p style={{ fontSize:"9px", color:"#4338ca", margin:"0 0 2px" }}>Calories</p>
-            <p style={{ fontSize:"18px", fontWeight:500, color:"#1e1b4b", margin:0 }}>1,840</p>
-            <p style={{ fontSize:"9px", color:"#6366f1" }}>of 2,200 today</p>
-          </div>
-          <div style={{ background:"#f0fdf4", borderRadius:"8px", padding:"8px" }}>
-            <p style={{ fontSize:"9px", color:"#15803d", margin:"0 0 2px" }}>Protein</p>
-            <p style={{ fontSize:"18px", fontWeight:500, color:"#14532d", margin:0 }}>142<span style={{ fontSize:"10px", color:"#15803d" }}>g</span></p>
-            <p style={{ fontSize:"9px", color:"#86efac" }}>of 150g goal</p>
-          </div>
-        </div>
-
-        {/* AI coach preview */}
-        <div style={{ padding:"0 12px 12px" }}>
-          <p style={{ fontSize:"9px", fontWeight:500, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.06em", margin:"0 0 6px" }}>AI coach</p>
-          <div style={{ background:"#f9fafb", borderRadius:"10px", padding:"10px" }}>
-            <div style={{ display:"flex", gap:"6px", alignItems:"flex-start", marginBottom:"6px" }}>
-              <div style={{ width:"20px", height:"20px", borderRadius:"50%", background:"#eef2ff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              </div>
-              <p style={{ fontSize:"10px", color:"#374151", lineHeight:1.5, background:"#f3f4f6", padding:"6px 8px", borderRadius:"10px", borderBottomLeftRadius:"2px", margin:0 }}>
-                You're crushing it! 3 workouts done this week. Upper body today — let's go! 💪
-              </p>
-            </div>
-            <div style={{ display:"flex", gap:"6px", background:"#f3f4f6", borderRadius:"8px", padding:"6px 8px", alignItems:"center" }}>
-              <p style={{ fontSize:"10px", color:"#9ca3af", flex:1, margin:0 }}>Ask anything...</p>
-              <div style={{ width:"22px", height:"22px", borderRadius:"6px", background:"#4f46e5", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
   );
 }
