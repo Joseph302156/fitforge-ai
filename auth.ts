@@ -3,6 +3,7 @@ import Google from "next-auth/providers/google"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
+  session: { strategy: "jwt" },
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -11,7 +12,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   cookies: {
     pkceCodeVerifier: {
-      name: "authjs.pkce.code_verifier",
+      name: "next-auth.pkce.code_verifier",
       options: {
         httpOnly: true,
         sameSite: "none",
@@ -20,4 +21,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     },
   },
+  callbacks: {
+    async session({ session, token }) {
+      if (token?.sub) session.user.id = token.sub
+      return session
+    },
+    async jwt({ token, user }) {
+      if (user) token.sub = user.id
+      return token
+    }
+  }
 })
