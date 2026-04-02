@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/hooks/useSession";
 import { getNutritionLogs, saveNutritionLog, getNutritionGoals, saveNutritionGoals } from "@/lib/supabase";
 
 type Meal = { id:string; name:string; calories:number; protein:number; carbs:number; fat:number };

@@ -1,5 +1,5 @@
 "use client";
-import { signIn } from "next-auth/react";
+import { signIn } from "@/hooks/useSession";
 import { useState } from "react";
 
 function FitForgeLogo({ size = 72 }: { size?: number }) {

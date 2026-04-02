@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/hooks/useSession";
 import { getWorkoutLogs, getWorkoutPlan, getNutritionLogs, getNutritionGoals } from "@/lib/supabase";
 
 type Day = { day: string; type: string; name: string; duration?: string; exercises?: string[] };

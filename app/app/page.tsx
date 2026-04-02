@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession, signOut } from "@/hooks/useSession";
 import dynamic from "next/dynamic";
 
 const HomeTab      = dynamic(() => import("../components/HomeTab"),      { ssr: false });

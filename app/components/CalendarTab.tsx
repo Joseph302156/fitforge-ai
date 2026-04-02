@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/hooks/useSession";
 import { getWorkoutLogs, getWorkoutPlan } from "@/lib/supabase";
 
 type LogEntry = { dayName: string; duration: string; exerciseCount: number; timeElapsed: number };
