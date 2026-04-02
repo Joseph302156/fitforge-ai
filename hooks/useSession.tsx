@@ -1,6 +1,12 @@
 "use client"
 import { useState, useEffect, createContext, useContext } from "react"
-import type { AuthUser } from "@/lib/auth"
+
+type AuthUser = {
+  id: string
+  email: string
+  name: string
+  image?: string
+}
 
 type SessionContextType = {
   data: { user: AuthUser } | null
