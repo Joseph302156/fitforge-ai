@@ -52,7 +52,7 @@ export function useSession() {
 
 export function signIn(provider: string, options?: { callbackUrl?: string }) {
   const callbackUrl = options?.callbackUrl || "/app"
-  window.location.href = `/api/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`
+  window.location.href = `/api/auth/initiate?callbackUrl=${encodeURIComponent(callbackUrl)}`
 }
 
 export function signOut(options?: { callbackUrl?: string }) {
