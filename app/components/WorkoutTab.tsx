@@ -22,10 +22,11 @@ type Plan = { days: Day[]; tip?: string };
 function localDateStr(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 function getWeekKey() {
   const now = new Date();
-  const jan4 = new Date(now.getFullYear(),0,4);
-  const dayOfYear = Math.floor((now.getTime()-new Date(now.getFullYear(),0,0).getTime())/86400000);
-  const weekNum = Math.ceil((dayOfYear+jan4.getDay())/7);
-  return `${now.getFullYear()}-W${String(weekNum).padStart(2,"0")}`;
+  const day = now.getDay(); // 0=Sun
+  const daysFromMonday = day === 0 ? 6 : day - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysFromMonday);
+  return `${monday.getFullYear()}-${String(monday.getMonth()+1).padStart(2,"0")}-${String(monday.getDate()).padStart(2,"0")}`;
 }
 
 function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void; onDone: (n:string,d:string,c:number,s:number)=>void }) {
@@ -109,7 +110,7 @@ function DayCard({ day, onEdit, onStart, isCompleted, isToday }: { day:Day; onEd
   return <div onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} onClick={()=>{if(isToday)onStart(day);}} style={{background:"#f9fafb",borderRadius:"12px",border:hovered&&isToday?"1px solid #e5e7eb":"1px solid #f3f4f6",cursor:isToday?"pointer":"default",transition:"border-color 0.15s",opacity:isToday?1:0.75}}><div style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 12px 8px"}}><div style={{width:"36px",height:"36px",borderRadius:"8px",background:c.bg,color:c.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:500,flexShrink:0}}>{c.badge}</div><div style={{flex:1,minWidth:0}}><p style={{fontSize:"12px",fontWeight:500,color:"#1f2937",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{day.name}</p><p style={{fontSize:"10px",color:"#9ca3af",margin:"2px 0 0"}}>{day.duration} · {day.exercises?.length} exercises</p>{!isToday&&<p style={{fontSize:"10px",color:"#f59e0b",margin:"2px 0 0"}}>available on {day.day}</p>}</div><div style={{display:"flex",alignItems:"center",gap:"6px"}}><button onClick={e=>{e.stopPropagation();onEdit(day);}} style={{width:"28px",height:"28px",borderRadius:"8px",border:"1px solid #e5e7eb",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:hovered?1:0,transition:"opacity 0.15s",color:"#d1d5db"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>{isToday&&<div style={{width:"28px",height:"28px",display:"flex",alignItems:"center",justifyContent:"center",color:hovered?"#6b7280":"#d1d5db"}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>}</div></div><div style={{borderLeft:"2px solid #e5e7eb",marginLeft:"16px",paddingLeft:"12px",paddingBottom:"12px",display:"flex",flexDirection:"column",gap:"4px"}}>{day.exercises?.map((ex,i)=><p key={i} style={{fontSize:"10px",color:"#6b7280",margin:0}}>{ex}</p>)}</div></div>;
 }
 
-function ChatBox({ plan, goal, level, onPlanUpdate }: { plan:Plan; goal:string; level:string; onPlanUpdate:(p:Plan)=>void }) {
+function ChatBox({ plan, goal, level, currentDay, pastDays, userPrompt, onPlanUpdate }: { plan:Plan; goal:string; level:string; currentDay:string; pastDays:string[]; userPrompt:string; onPlanUpdate:(p:Plan)=>void }) {
   const [msgs,setMsgs]=useState([{role:"assistant",text:"Hey! I'm your AI trainer. Ask me anything about your plan.",updated:false}]);
   const [input,setInput]=useState("");const [loading,setLoading]=useState(false);const [open,setOpen]=useState(false);
   const bottomRef=useRef<HTMLDivElement>(null);
@@ -119,7 +120,7 @@ function ChatBox({ plan, goal, level, onPlanUpdate }: { plan:Plan; goal:string; 
     setInput("");setLoading(true);
     const next=[...msgs,{role:"user",text:t,updated:false}];setMsgs(next);
     const summary=plan.days.map(d=>d.type==="rest"?`${d.day}: Rest`:`${d.day}: ${d.name} (${d.duration}) — ${d.exercises?.join(", ")}`).join("\n");
-    try{const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,planSummary:summary,messages:next.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.text}))})});const data=await res.json();if(data.updatedPlan){onPlanUpdate(data.updatedPlan);setMsgs(p=>[...p,{role:"assistant",text:data.message||"Plan updated!",updated:true}]);}else setMsgs(p=>[...p,{role:"assistant",text:data.message||"Let me know if you need changes!",updated:false}]);}
+    try{const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,planSummary:summary,currentDay,pastDays,userPrompt,messages:next.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.text}))})});const data=await res.json();if(data.updatedPlan){onPlanUpdate(data.updatedPlan);setMsgs(p=>[...p,{role:"assistant",text:data.message||"Plan updated!",updated:true}]);}else setMsgs(p=>[...p,{role:"assistant",text:data.message||"Let me know if you need changes!",updated:false}]);}
     catch{setMsgs(p=>[...p,{role:"assistant",text:"Sorry, something went wrong.",updated:false}]);}
     finally{setLoading(false);}
   }
@@ -217,7 +218,7 @@ export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkout
       {toast&&<div style={{marginBottom:"12px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:"12px",padding:"10px 16px",fontSize:"12px",color:"#16a34a",textAlign:"center",fontWeight:500}}>{toast}</div>}
       {plan?.tip&&<div style={{background:"#eef2ff",borderRadius:"12px",padding:"12px",marginBottom:"16px"}}><p style={{fontSize:"10px",color:"#4f46e5",fontWeight:500,margin:"0 0 4px"}}>AI tip for you</p><p style={{fontSize:"12px",color:"#3730a3",lineHeight:1.6,margin:0}}>{plan.tip}</p></div>}
       <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-        {plan?.days.map(day=>{
+        {plan?.days.filter((_,i)=>i>=currentDayIndex).map(day=>{
           const dows=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
           const di=dows.indexOf(day.day);const ci=dows.indexOf(currentDayName);
           const diff=di-ci;const dd=new Date(today);dd.setDate(today.getDate()+diff);
@@ -227,7 +228,7 @@ export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkout
           return <DayCard key={day.day} day={day} onEdit={d=>setEditDay(d)} onStart={d=>{if(!isComp)setSessionDay(d);}} isCompleted={isComp} isToday={isToday}/>;
         })}
       </div>
-      <ChatBox plan={plan!} goal={goal} level={level} onPlanUpdate={p=>{updatePlan(p);showToast("Plan updated!");}}/>
+      <ChatBox plan={plan!} goal={goal} level={level} currentDay={currentDayName} pastDays={pastDays} userPrompt={prompt} onPlanUpdate={p=>{updatePlan(p);showToast("Plan updated!");}}/>
       <button onClick={startOver} style={{width:"100%",marginTop:"12px",background:"transparent",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"10px",fontSize:"12px",color:"#9ca3af",cursor:"pointer"}}>← Start over</button>
     </>
   );
