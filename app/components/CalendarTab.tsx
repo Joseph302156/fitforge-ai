@@ -19,7 +19,7 @@ function pad(n:number){return String(n).padStart(2,"0");}
 function toDateStr(d:Date){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
 function getDayName(d:Date){return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getDay()];}
 function fmtTime(s:number){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;return h>0?`${h}:${pad(m)}:${pad(sc)}`:`${pad(m)}:${pad(sc)}`;}
-function getWeekKey(date:Date){const jan4=new Date(date.getFullYear(),0,4);const dayOfYear=Math.floor((date.getTime()-new Date(date.getFullYear(),0,0).getTime())/86400000);const weekNum=Math.ceil((dayOfYear+jan4.getDay())/7);return `${date.getFullYear()}-W${String(weekNum).padStart(2,"0")}`;}
+function getWeekKey(date:Date){const day=date.getDay();const daysFromMonday=day===0?6:day-1;const monday=new Date(date);monday.setDate(date.getDate()-daysFromMonday);return `${monday.getFullYear()}-${pad(monday.getMonth()+1)}-${pad(monday.getDate())}`;}
 type CT="completed"|"today-done"|"today-sched"|"today"|"upcoming"|"missed"|"empty";
 
 export default function CalendarTab({ workoutLog: propLog, isDesktop }: { workoutLog: Record<string, LogEntry>; isDesktop?: boolean }) {
