@@ -25,7 +25,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   })
 
   useEffect(() => {
-    fetch("/api/auth/session")
+    fetch("/api/oauth/session")
       .then(r => r.json())
       .then(data => {
         if (data.user) {
@@ -52,9 +52,9 @@ export function useSession() {
 
 export function signIn(provider: string, options?: { callbackUrl?: string }) {
   const callbackUrl = options?.callbackUrl || "/app"
-  window.location.href = `/api/auth/initiate?callbackUrl=${encodeURIComponent(callbackUrl)}`
+  window.location.href = `/api/oauth/start?callbackUrl=${encodeURIComponent(callbackUrl)}`
 }
 
 export function signOut(options?: { callbackUrl?: string }) {
-  window.location.href = `/api/auth/signout`
+  window.location.href = `/api/oauth/signout`
 }
