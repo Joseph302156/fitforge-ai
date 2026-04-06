@@ -46,10 +46,17 @@ function parseSetCount(ex:string):number {
 
 function detectMetric(ex:string):MetricType {
   const s=ex.toLowerCase();
-  if(/\b(run|running|sprint|jog|jogging|bike|cycling|cycle|treadmill|row|rowing)\b/.test(s))return"distance";
-  if(/\b(swim|swimming|freestyle|backstroke|breaststroke|lap)\b/.test(s))return"laps";
-  if(/\b(plank|wall.?sit|hold|isometric|dead.?hang|carry)\b/.test(s))return"timed";
-  if(/\b(push.?up|pull.?up|chin.?up|sit.?up|crunch|burpee|jumping.?jack|mountain.?climber|leg.?raise|v.?up|flutter|dip|lunge|step.?up|box.?jump|jump|skip|rope)\b/.test(s))return"reps_only";
+  // Explicit equipment keyword → always weight+reps (checked first so "dumbbell row" isn't caught as cardio)
+  if(/\b(barbell|dumbbell|db|cable|kettlebell|kb|ez.?bar|trap.?bar|smith|landmine)\b/.test(s))return"weight_reps";
+  // Cardio / distance
+  if(/\b(running|sprints?|jogging|biking|cycling|treadmill)\b/.test(s))return"distance";
+  if(/\brun\b/.test(s)||/\bbike\b/.test(s)||/\bcycle\b/.test(s))return"distance";
+  // Swimming
+  if(/\b(swim|swimming|freestyle|backstroke|breaststroke|laps?)\b/.test(s))return"laps";
+  // Timed holds
+  if(/\b(plank|wall.?sit|isometric|dead.?hang|farmer.?carry|suitcase.?carry|hollow.?hold)\b/.test(s))return"timed";
+  // Bodyweight / calisthenics — reps only (no weight field)
+  if(/\b(push.?ups?|pull.?ups?|chin.?ups?|sit.?ups?|crunches?|burpees?|jumping.?jacks?|mountain.?climbers?|leg.?raises?|v.?ups?|flutter.?kicks?|dips?|lunges?|step.?ups?|box.?jumps?|jump.?rope|skipping|air.?squats?|bodyweight|body.?weight|pike.?push|inverted.?row|ring.?row|ring.?push|muscle.?up|handstand)\b/.test(s))return"reps_only";
   return"weight_reps";
 }
 
@@ -73,6 +80,7 @@ function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void;
   const [done,setDone]=useState(false);
   const [expanded,setExpanded]=useState<number|null>(null);
   const [rest,setRest]=useState<RestInfo|null>(null);
+  const [confirmEnd,setConfirmEnd]=useState(false);
   const mainT=useRef<ReturnType<typeof setInterval>|null>(null);
   const restT=useRef<ReturnType<typeof setInterval>|null>(null);
 
@@ -210,8 +218,8 @@ function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void;
                                 <span style={{fontSize:"10px",color:"#9ca3af"}}>{ml.v2Label}</span>
                               </>}
                             </div>
-                            <button onClick={()=>{if(started&&!s.done)completeSet(exIdx,si);}} disabled={!started||s.done}
-                              style={{width:"30px",height:"30px",borderRadius:"50%",border:s.done?"none":"1.5px solid #d1d5db",background:s.done?"#22c55e":"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",cursor:started&&!s.done?"pointer":"default",flexShrink:0}}>
+                            <button onClick={()=>{if(started&&!s.done&&!rest)completeSet(exIdx,si);}} disabled={!started||s.done||!!rest}
+                              style={{width:"30px",height:"30px",borderRadius:"50%",border:s.done?"none":"1.5px solid #d1d5db",background:s.done?"#22c55e":"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",cursor:started&&!s.done&&!rest?"pointer":"default",flexShrink:0,opacity:rest&&!s.done?0.4:1}}>
                               {s.done&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                             </button>
                           </div>
@@ -241,7 +249,18 @@ function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void;
         {/* ── Footer ── */}
         <div style={{padding:"8px 20px 20px",flexShrink:0,display:"flex",flexDirection:"column",gap:"8px"}}>
           {!started&&<button onClick={start} style={{width:"100%",background:c.accent,color:"white",border:"none",borderRadius:"16px",padding:"14px",fontSize:"14px",fontWeight:500,cursor:"pointer"}}>Start workout</button>}
-          {started&&!done&&<button onClick={finish} style={{width:"100%",background:"#1f2937",color:"white",border:"none",borderRadius:"16px",padding:"14px",fontSize:"14px",fontWeight:500,cursor:"pointer"}}>End workout</button>}
+          {started&&!done&&!confirmEnd&&(
+            <button onClick={()=>{if(doneSets<totalSets)setConfirmEnd(true);else finish();}} style={{width:"100%",background:"#1f2937",color:"white",border:"none",borderRadius:"16px",padding:"14px",fontSize:"14px",fontWeight:500,cursor:"pointer"}}>End workout</button>
+          )}
+          {confirmEnd&&(
+            <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:"14px",padding:"12px 14px"}}>
+              <p style={{fontSize:"12px",color:"#c2410c",fontWeight:500,margin:"0 0 10px"}}>⚠️ {totalSets-doneSets} set{totalSets-doneSets!==1?"s":""} still remaining — end workout anyway?</p>
+              <div style={{display:"flex",gap:"8px"}}>
+                <button onClick={finish} style={{flex:1,background:"#1f2937",color:"white",border:"none",borderRadius:"10px",padding:"10px",fontSize:"12px",fontWeight:500,cursor:"pointer"}}>Yes, end it</button>
+                <button onClick={()=>setConfirmEnd(false)} style={{flex:1,background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"12px",cursor:"pointer"}}>Keep going</button>
+              </div>
+            </div>
+          )}
           {done&&<button onClick={onClose} style={{width:"100%",background:c.accent,color:"white",border:"none",borderRadius:"16px",padding:"14px",fontSize:"14px",fontWeight:500,cursor:"pointer"}}>Done</button>}
           {!done&&<button onClick={onClose} style={{width:"100%",background:"transparent",color:"#9ca3af",border:"1px solid #e5e7eb",borderRadius:"16px",padding:"10px",fontSize:"12px",cursor:"pointer"}}>{started?"Minimize":"Cancel"}</button>}
         </div>
