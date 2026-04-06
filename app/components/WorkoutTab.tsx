@@ -29,40 +29,216 @@ function getWeekKey() {
   return `${monday.getFullYear()}-${String(monday.getMonth()+1).padStart(2,"0")}-${String(monday.getDate()).padStart(2,"0")}`;
 }
 
+// ── Set tracking helpers ──────────────────────────────────────────
+const REST_SECS = 90;
+const RING_CIRC = 100.5; // 2π×16
+
+type MetricType = "weight_reps"|"reps_only"|"distance"|"laps"|"timed";
+type SetEntry = { v1:string; v2:string; done:boolean };
+type ExState  = { sets:SetEntry[]; metric:MetricType };
+type RestInfo = { secsLeft:number; exIdx:number; setIdx:number };
+
+function parseSetCount(ex:string):number {
+  const m=ex.match(/(\d+)\s*[xX×]\s*\d+/);
+  if(m)return Math.min(Math.max(parseInt(m[1]),1),8);
+  return 3;
+}
+
+function detectMetric(ex:string):MetricType {
+  const s=ex.toLowerCase();
+  if(/\b(run|running|sprint|jog|jogging|bike|cycling|cycle|treadmill|row|rowing)\b/.test(s))return"distance";
+  if(/\b(swim|swimming|freestyle|backstroke|breaststroke|lap)\b/.test(s))return"laps";
+  if(/\b(plank|wall.?sit|hold|isometric|dead.?hang|carry)\b/.test(s))return"timed";
+  if(/\b(push.?up|pull.?up|chin.?up|sit.?up|crunch|burpee|jumping.?jack|mountain.?climber|leg.?raise|v.?up|flutter|dip|lunge|step.?up|box.?jump|jump|skip|rope)\b/.test(s))return"reps_only";
+  return"weight_reps";
+}
+
+function metricFields(m:MetricType):{v1Label:string;v1Ph:string;v2Label?:string;v2Ph?:string} {
+  if(m==="weight_reps")return{v1Label:"lbs",v1Ph:"0",v2Label:"reps",v2Ph:"0"};
+  if(m==="reps_only")  return{v1Label:"reps",v1Ph:"0"};
+  if(m==="distance")   return{v1Label:"mi",v1Ph:"0.0"};
+  if(m==="laps")       return{v1Label:"laps",v1Ph:"0"};
+  return                     {v1Label:"sec",v1Ph:"0"};
+}
+
 function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void; onDone: (n:string,d:string,c:number,s:number)=>void }) {
-  const c = DAY_COLORS[day.day]||{bg:"#f9fafb",text:"#6b7280",badge:"DAY",accent:"#6366f1"};
+  const c=DAY_COLORS[day.day]||{bg:"#f9fafb",text:"#6b7280",badge:"DAY",accent:"#6366f1"};
+  const exNames=day.exercises||[];
+
+  const [exStates,setExStates]=useState<ExState[]>(()=>
+    exNames.map(ex=>({metric:detectMetric(ex),sets:Array(parseSetCount(ex)).fill(null).map(()=>({v1:"",v2:"",done:false}))}))
+  );
   const [started,setStarted]=useState(false);
   const [secs,setSecs]=useState(0);
-  const [checked,setChecked]=useState<boolean[]>(Array(day.exercises?.length||0).fill(false));
   const [done,setDone]=useState(false);
-  const timer=useRef<ReturnType<typeof setInterval>|null>(null);
-  const completed=checked.filter(Boolean).length;
-  const allDone=completed===checked.length&&checked.length>0;
-  useEffect(()=>{if(allDone&&started&&!done)setTimeout(finish,600);},[checked]);
-  useEffect(()=>()=>{if(timer.current)clearInterval(timer.current);},[]);
-  function start(){setStarted(true);timer.current=setInterval(()=>setSecs(s=>s+1),1000);}
-  function finish(){if(timer.current)clearInterval(timer.current);setDone(true);onDone(day.name,day.duration||"",day.exercises?.length||0,secs);}
-  function toggle(i:number){if(!started||done)return;setChecked(p=>{const u=[...p];u[i]=!u[i];return u;});}
+  const [expanded,setExpanded]=useState<number|null>(null);
+  const [rest,setRest]=useState<RestInfo|null>(null);
+  const mainT=useRef<ReturnType<typeof setInterval>|null>(null);
+  const restT=useRef<ReturnType<typeof setInterval>|null>(null);
+
+  const totalSets=exStates.reduce((a,ex)=>a+ex.sets.length,0);
+  const doneSets=exStates.reduce((a,ex)=>a+ex.sets.filter(s=>s.done).length,0);
+  const allDone=doneSets===totalSets&&totalSets>0;
+
+  useEffect(()=>{if(allDone&&started&&!done){const t=setTimeout(finish,800);return()=>clearTimeout(t);}},[allDone,started,done]);
+  useEffect(()=>()=>{if(mainT.current)clearInterval(mainT.current);if(restT.current)clearInterval(restT.current);},[]);
+
+  function start(){setStarted(true);mainT.current=setInterval(()=>setSecs(s=>s+1),1000);setExpanded(0);}
+  function finish(){if(mainT.current)clearInterval(mainT.current);if(restT.current)clearInterval(restT.current);setRest(null);setDone(true);onDone(day.name,day.duration||"",exNames.length,secs);}
+
+  function completeSet(exIdx:number,setIdx:number){
+    setExStates(prev=>{const n=prev.map(ex=>({...ex,sets:ex.sets.map(s=>({...s}))}));n[exIdx].sets[setIdx].done=true;return n;});
+    if(restT.current)clearInterval(restT.current);
+    setRest({secsLeft:REST_SECS,exIdx,setIdx});
+    restT.current=setInterval(()=>setRest(p=>{if(!p)return null;if(p.secsLeft<=1){clearInterval(restT.current!);return null;}return{...p,secsLeft:p.secsLeft-1};}),1000);
+  }
+
+  function skipRest(){if(restT.current)clearInterval(restT.current);setRest(null);}
+
+  function updateSet(exIdx:number,setIdx:number,field:"v1"|"v2",val:string){
+    setExStates(prev=>{const n=prev.map(ex=>({...ex,sets:ex.sets.map(s=>({...s}))}));n[exIdx].sets[setIdx][field]=val;return n;});
+  }
+
+  function adjustSets(exIdx:number,delta:number){
+    setExStates(prev=>{
+      const n=prev.map(ex=>({...ex,sets:ex.sets.map(s=>({...s}))}));
+      const ex=n[exIdx];
+      const nc=Math.min(Math.max(ex.sets.length+delta,1),8);
+      if(nc>ex.sets.length){for(let i=ex.sets.length;i<nc;i++)ex.sets.push({v1:"",v2:"",done:false});}
+      else{ex.sets=ex.sets.slice(0,nc);}
+      return n;
+    });
+  }
+
+  function getNextLabel(exIdx:number,setIdx:number):string {
+    const ex=exStates[exIdx];
+    if(setIdx<ex.sets.length-1)return`Set ${setIdx+2} of ${ex.sets.length}`;
+    if(exIdx<exStates.length-1){const nm=exNames[exIdx+1].replace(/\s*\d+\s*[xX×]\s*\d+.*$/,"").trim();return nm.length>22?nm.slice(0,20)+"…":nm;}
+    return"Final set!";
+  }
+
   function fmt(s:number){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;return h>0?`${h}:${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`:`${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`;}
+
   return (
     <div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"16px",background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)"}}>
       <div style={{width:"100%",maxWidth:"384px",background:"white",borderRadius:"24px",overflow:"hidden",maxHeight:"90vh",display:"flex",flexDirection:"column",animation:"slideUp 0.3s ease forwards"}}>
+
+        {/* ── Header ── */}
         <div style={{background:"#1a1a2e",padding:"20px 20px 16px",flexShrink:0}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"16px"}}>
             <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
               <div style={{width:"40px",height:"40px",borderRadius:"10px",background:c.bg,color:c.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:700,flexShrink:0}}>{c.badge}</div>
-              <div><p style={{color:"white",fontSize:"14px",fontWeight:500,margin:0}}>{day.name}</p><p style={{color:"rgba(255,255,255,0.4)",fontSize:"11px",margin:"2px 0 0"}}>{day.duration} · {day.exercises?.length} exercises</p></div>
+              <div><p style={{color:"white",fontSize:"14px",fontWeight:500,margin:0}}>{day.name}</p><p style={{color:"rgba(255,255,255,0.4)",fontSize:"11px",margin:"2px 0 0"}}>{day.duration} · {exNames.length} exercises</p></div>
             </div>
             {!started&&<button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",fontSize:"20px",cursor:"pointer",lineHeight:1}}>✕</button>}
           </div>
-          <div style={{textAlign:"center",padding:"12px 0"}}>
+          <div style={{textAlign:"center",padding:"10px 0 4px"}}>
             <div style={{fontFamily:"monospace",fontSize:"40px",fontWeight:700,color:"white",letterSpacing:"4px"}}>{fmt(secs)}</div>
             <p style={{color:"rgba(255,255,255,0.35)",fontSize:"11px",margin:"4px 0 0"}}>{!started?"Ready to start":done?"Workout complete":"Time elapsed"}</p>
           </div>
-          {started&&!done&&<><div style={{background:"rgba(255,255,255,0.1)",borderRadius:"99px",height:"6px",overflow:"hidden",marginTop:"8px"}}><div style={{height:"100%",borderRadius:"99px",background:c.accent,width:`${(completed/checked.length)*100}%`,transition:"width 0.5s"}}/></div><p style={{color:"rgba(255,255,255,0.35)",fontSize:"10px",textAlign:"center",margin:"6px 0 0"}}>{completed} of {checked.length} done</p></>}
+          {started&&!done&&<><div style={{background:"rgba(255,255,255,0.1)",borderRadius:"99px",height:"5px",overflow:"hidden",marginTop:"10px"}}><div style={{height:"100%",borderRadius:"99px",background:"#22c55e",width:`${(doneSets/totalSets)*100}%`,transition:"width 0.5s"}}/></div><p style={{color:"rgba(255,255,255,0.3)",fontSize:"10px",textAlign:"center",margin:"5px 0 0"}}>{doneSets} of {totalSets} sets done</p></>}
         </div>
-        {!done&&<div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}><p style={{fontSize:"10px",fontWeight:600,color:"#9ca3af",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"12px"}}>Exercises</p><div style={{display:"flex",flexDirection:"column",gap:"8px"}}>{day.exercises?.map((ex,i)=><button key={i} onClick={()=>toggle(i)} disabled={!started||done} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px",borderRadius:"12px",border:checked[i]?"1px solid #bbf7d0":"1px solid #f3f4f6",background:checked[i]?"#f0fdf4":"#f9fafb",cursor:started&&!done?"pointer":"default",textAlign:"left",opacity:!started?0.6:1}}><div style={{width:"20px",height:"20px",borderRadius:"50%",border:checked[i]?"2px solid #22c55e":"2px solid #d1d5db",background:checked[i]?"#22c55e":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{checked[i]&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}</div><span style={{fontSize:"12px",color:checked[i]?"#16a34a":"#374151",textDecoration:checked[i]?"line-through":"none",flex:1}}>{ex}</span></button>)}</div></div>}
-        {done&&<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 20px",textAlign:"center"}}><div style={{width:"64px",height:"64px",borderRadius:"50%",background:"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:"16px",animation:"popIn 0.4s ease forwards"}}><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><h3 style={{fontSize:"18px",fontWeight:600,color:"#1f2937",margin:"0 0 4px"}}>{allDone?"Workout complete!":"Good effort!"}</h3><p style={{fontSize:"12px",color:"#9ca3af",margin:"0 0 8px"}}>{allDone?`You crushed all ${day.exercises?.length} exercises`:`Completed ${completed} of ${day.exercises?.length}`}</p><p style={{fontFamily:"monospace",fontSize:"28px",fontWeight:700,color:"#374151",margin:"8px 0 4px"}}>{fmt(secs)}</p><p style={{fontSize:"10px",color:"#9ca3af"}}>Total time</p></div>}
+
+        {/* ── Rest timer banner ── */}
+        {rest&&(
+          <div style={{background:"#f0fdf4",borderBottom:"1px solid #bbf7d0",padding:"10px 16px",display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
+            <div style={{width:"38px",height:"38px",position:"relative",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width="38" height="38" viewBox="0 0 38 38" style={{position:"absolute",top:0,left:0}}>
+                <circle cx="19" cy="19" r="16" fill="none" stroke="#bbf7d0" strokeWidth="3"/>
+                <circle cx="19" cy="19" r="16" fill="none" stroke="#22c55e" strokeWidth="3"
+                  strokeDasharray={RING_CIRC} strokeDashoffset={RING_CIRC*(1-rest.secsLeft/REST_SECS)}
+                  strokeLinecap="round" transform="rotate(-90 19 19)" style={{transition:"stroke-dashoffset 1s linear"}}/>
+              </svg>
+              <span style={{color:"#15803d",fontSize:"11px",fontWeight:700,fontFamily:"monospace",position:"relative",zIndex:1}}>{rest.secsLeft}</span>
+            </div>
+            <div style={{flex:1}}>
+              <p style={{color:"#15803d",fontSize:"12px",fontWeight:600,margin:0}}>Rest — Set {rest.setIdx+1} complete ✓</p>
+              <p style={{color:"#16a34a",fontSize:"10px",margin:"2px 0 0"}}>Next: {getNextLabel(rest.exIdx,rest.setIdx)}</p>
+            </div>
+            <button onClick={skipRest} style={{color:"#15803d",fontSize:"11px",fontWeight:500,background:"white",border:"1px solid #bbf7d0",borderRadius:"8px",padding:"5px 10px",cursor:"pointer"}}>Skip →</button>
+          </div>
+        )}
+
+        {/* ── Exercise list ── */}
+        {!done&&(
+          <div style={{flex:1,overflowY:"auto",padding:"14px 16px"}}>
+            <p style={{fontSize:"10px",fontWeight:600,color:"#9ca3af",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"8px"}}>Exercises</p>
+            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+              {exNames.map((exName,exIdx)=>{
+                const ex=exStates[exIdx];
+                const exDone=ex.sets.every(s=>s.done)&&ex.sets.length>0;
+                const isOpen=expanded===exIdx;
+                const ml=metricFields(ex.metric);
+                const cleanName=exName.replace(/\s*\d+\s*[xX×]\s*\d+.*$/,"").trim()||exName;
+                return(
+                  <div key={exIdx} style={{borderRadius:"12px",border:`1.5px solid ${exDone?"#bbf7d0":isOpen?"#e5e7eb":"#f3f4f6"}`,overflow:"hidden",background:exDone?"#f0fdf4":"#fafafa"}}>
+                    {/* Collapsed header */}
+                    <div onClick={()=>setExpanded(isOpen?null:exIdx)} style={{display:"flex",alignItems:"center",gap:"10px",padding:"11px 12px",cursor:"pointer"}}>
+                      <div style={{width:"32px",height:"32px",borderRadius:"8px",background:exDone?"#dcfce7":"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:"10px",fontWeight:700,color:exDone?"#15803d":"#9ca3af"}}>
+                        {exDone?"✓":`${ex.sets.length}×`}
+                      </div>
+                      <p style={{flex:1,fontSize:"12px",fontWeight:500,color:exDone?"#15803d":"#1f2937",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cleanName}</p>
+                      {/* +/- set count controls + dots */}
+                      <div style={{display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
+                        <button onClick={e=>{e.stopPropagation();adjustSets(exIdx,-1);}} disabled={ex.sets.length<=1} style={{width:"16px",height:"16px",borderRadius:"50%",border:"1px solid #e5e7eb",background:"white",fontSize:"11px",color:"#9ca3af",cursor:ex.sets.length<=1?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,lineHeight:1,opacity:ex.sets.length<=1?0.3:1}}>−</button>
+                        <div style={{display:"flex",gap:"3px",alignItems:"center"}}>
+                          {ex.sets.map((s,si)=>(
+                            <div key={si} style={{width:"9px",height:"9px",borderRadius:"50%",background:s.done?"#22c55e":"#e5e7eb"}}/>
+                          ))}
+                        </div>
+                        <button onClick={e=>{e.stopPropagation();adjustSets(exIdx,1);}} disabled={ex.sets.length>=8} style={{width:"16px",height:"16px",borderRadius:"50%",border:"1px solid #e5e7eb",background:"white",fontSize:"11px",color:"#9ca3af",cursor:ex.sets.length>=8?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,lineHeight:1,opacity:ex.sets.length>=8?0.3:1}}>+</button>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{transform:isOpen?"rotate(180deg)":"rotate(0)",transition:"transform 0.2s",marginLeft:"2px"}}>
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </div>
+                    </div>
+                    {/* Expanded set panel */}
+                    {isOpen&&(
+                      <div style={{borderTop:"1px solid #f3f4f6",padding:"12px",background:"white",display:"flex",flexDirection:"column",gap:"8px"}}>
+                        {!started&&<p style={{fontSize:"10px",color:"#9ca3af",margin:"0 0 2px"}}>Start workout to log sets · tap ✓ after each set</p>}
+                        {ex.sets.map((s,si)=>(
+                          <div key={si} style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                            <span style={{width:"22px",fontSize:"10px",fontWeight:600,color:s.done?"#9ca3af":"#374151",flexShrink:0}}>S{si+1}</span>
+                            <div style={{display:"flex",alignItems:"center",gap:"5px",flex:1}}>
+                              <input value={s.v1} onChange={e=>updateSet(exIdx,si,"v1",e.target.value)} placeholder={ml.v1Ph} disabled={s.done||!started} type="number" inputMode="decimal"
+                                style={{width:"52px",background:s.done?"#f0fdf4":"#f9fafb",border:`1px solid ${s.done?"#bbf7d0":"#e5e7eb"}`,borderRadius:"8px",padding:"6px 8px",fontSize:"12px",color:s.done?"#15803d":"#374151",textAlign:"center",outline:"none"}}/>
+                              <span style={{fontSize:"10px",color:"#9ca3af"}}>{ml.v1Label}</span>
+                              {ml.v2Label&&<>
+                                <span style={{fontSize:"11px",color:"#d1d5db"}}>×</span>
+                                <input value={s.v2} onChange={e=>updateSet(exIdx,si,"v2",e.target.value)} placeholder={ml.v2Ph} disabled={s.done||!started} type="number" inputMode="numeric"
+                                  style={{width:"52px",background:s.done?"#f0fdf4":"#f9fafb",border:`1px solid ${s.done?"#bbf7d0":"#e5e7eb"}`,borderRadius:"8px",padding:"6px 8px",fontSize:"12px",color:s.done?"#15803d":"#374151",textAlign:"center",outline:"none"}}/>
+                                <span style={{fontSize:"10px",color:"#9ca3af"}}>{ml.v2Label}</span>
+                              </>}
+                            </div>
+                            <button onClick={()=>{if(started&&!s.done)completeSet(exIdx,si);}} disabled={!started||s.done}
+                              style={{width:"30px",height:"30px",borderRadius:"50%",border:s.done?"none":"1.5px solid #d1d5db",background:s.done?"#22c55e":"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",cursor:started&&!s.done?"pointer":"default",flexShrink:0}}>
+                              {s.done&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Done screen ── */}
+        {done&&(
+          <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 20px",textAlign:"center"}}>
+            <div style={{width:"64px",height:"64px",borderRadius:"50%",background:"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:"16px",animation:"popIn 0.4s ease forwards"}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <h3 style={{fontSize:"18px",fontWeight:600,color:"#1f2937",margin:"0 0 4px"}}>Workout complete!</h3>
+            <p style={{fontSize:"12px",color:"#9ca3af",margin:"0 0 8px"}}>{doneSets} of {totalSets} sets logged</p>
+            <p style={{fontFamily:"monospace",fontSize:"28px",fontWeight:700,color:"#374151",margin:"8px 0 4px"}}>{fmt(secs)}</p>
+            <p style={{fontSize:"10px",color:"#9ca3af"}}>Total time</p>
+          </div>
+        )}
+
+        {/* ── Footer ── */}
         <div style={{padding:"8px 20px 20px",flexShrink:0,display:"flex",flexDirection:"column",gap:"8px"}}>
           {!started&&<button onClick={start} style={{width:"100%",background:c.accent,color:"white",border:"none",borderRadius:"16px",padding:"14px",fontSize:"14px",fontWeight:500,cursor:"pointer"}}>Start workout</button>}
           {started&&!done&&<button onClick={finish} style={{width:"100%",background:"#1f2937",color:"white",border:"none",borderRadius:"16px",padding:"14px",fontSize:"14px",fontWeight:500,cursor:"pointer"}}>End workout</button>}
