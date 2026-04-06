@@ -70,10 +70,10 @@ function metricFields(m:MetricType):{v1Label:string;v1Ph:string;v2Label?:string;
 
 function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void; onDone: (n:string,d:string,c:number,s:number)=>void }) {
   const c=DAY_COLORS[day.day]||{bg:"#f9fafb",text:"#6b7280",badge:"DAY",accent:"#6366f1"};
-  const exNames=day.exercises||[];
 
+  const [exNames,setExNames]=useState<string[]>(day.exercises||[]);
   const [exStates,setExStates]=useState<ExState[]>(()=>
-    exNames.map(ex=>({metric:detectMetric(ex),sets:Array(parseSetCount(ex)).fill(null).map(()=>({v1:"",v2:"",done:false}))}))
+    (day.exercises||[]).map(ex=>({metric:detectMetric(ex),sets:Array(parseSetCount(ex)).fill(null).map(()=>({v1:"",v2:"",done:false}))}))
   );
   const [started,setStarted]=useState(false);
   const [secs,setSecs]=useState(0);
@@ -81,6 +81,7 @@ function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void;
   const [expanded,setExpanded]=useState<number|null>(null);
   const [rest,setRest]=useState<RestInfo|null>(null);
   const [confirmEnd,setConfirmEnd]=useState(false);
+  const [newEx,setNewEx]=useState("");
   const mainT=useRef<ReturnType<typeof setInterval>|null>(null);
   const restT=useRef<ReturnType<typeof setInterval>|null>(null);
 
@@ -116,6 +117,23 @@ function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void;
       else{ex.sets=ex.sets.slice(0,nc);}
       return n;
     });
+  }
+
+  function deleteExercise(exIdx:number){
+    setExNames(prev=>prev.filter((_,i)=>i!==exIdx));
+    setExStates(prev=>prev.filter((_,i)=>i!==exIdx));
+    if(expanded===exIdx)setExpanded(null);
+    else if(expanded!==null&&expanded>exIdx)setExpanded(expanded-1);
+  }
+
+  function addExercise(){
+    const name=newEx.trim();
+    if(!name)return;
+    setExNames(prev=>[...prev,name]);
+    setExStates(prev=>[...prev,{metric:detectMetric(name),sets:Array(3).fill(null).map(()=>({v1:"",v2:"",done:false}))}]);
+    setNewEx("");
+    // Auto-expand the newly added exercise
+    setExpanded(exNames.length);
   }
 
   function getNextLabel(exIdx:number,setIdx:number):string {
@@ -186,6 +204,8 @@ function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void;
                         {exDone?"✓":`${ex.sets.length}×`}
                       </div>
                       <p style={{flex:1,fontSize:"12px",fontWeight:500,color:exDone?"#15803d":"#1f2937",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cleanName}</p>
+                      {/* Delete exercise button */}
+                      {!done&&<button onClick={e=>{e.stopPropagation();deleteExercise(exIdx);}} style={{width:"18px",height:"18px",borderRadius:"50%",border:"1px solid #fecaca",background:"#fef2f2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",color:"#ef4444",fontSize:"11px",lineHeight:1}}>×</button>}
                       {/* +/- set count controls + dots */}
                       <div style={{display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
                         <button onClick={e=>{e.stopPropagation();adjustSets(exIdx,-1);}} disabled={ex.sets.length<=1} style={{width:"16px",height:"16px",borderRadius:"50%",border:"1px solid #e5e7eb",background:"white",fontSize:"11px",color:"#9ca3af",cursor:ex.sets.length<=1?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,lineHeight:1,opacity:ex.sets.length<=1?0.3:1}}>−</button>
@@ -230,6 +250,19 @@ function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void;
                 );
               })}
             </div>
+            {/* ── Add exercise ── */}
+            {!done&&(
+              <div style={{display:"flex",gap:"8px",marginTop:"12px"}}>
+                <input
+                  value={newEx}
+                  onChange={e=>setNewEx(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&addExercise()}
+                  placeholder="Add exercise..."
+                  style={{flex:1,fontSize:"12px",background:"#f9fafb",border:"1px dashed #d1d5db",borderRadius:"10px",padding:"9px 12px",color:"#374151",outline:"none"}}
+                />
+                <button onClick={addExercise} disabled={!newEx.trim()} style={{background:newEx.trim()?"#1a1a2e":"#f3f4f6",color:newEx.trim()?"white":"#d1d5db",border:"none",borderRadius:"10px",padding:"9px 14px",fontSize:"12px",fontWeight:500,cursor:newEx.trim()?"pointer":"default",flexShrink:0,transition:"background 0.15s"}}>+ Add</button>
+              </div>
+            )}
           </div>
         )}
 
