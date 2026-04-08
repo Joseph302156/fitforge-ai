@@ -103,6 +103,32 @@ export async function getLastSetData(
   return result
 }
 
+// ── Body Metrics ─────────────────────────────────────────────────────────────
+
+export type BodyMetricRow = { weekKey: string; weightLbs: number | null; bodyFatPct: number | null };
+
+export async function getBodyMetrics(userId: string): Promise<BodyMetricRow[]> {
+  const { data, error } = await supabase
+    .from("body_metrics")
+    .select("week_key, weight_lbs, body_fat_pct")
+    .eq("user_id", userId)
+    .order("week_key", { ascending: true })
+  if (error || !data) return []
+  return data.map(r => ({ weekKey: r.week_key, weightLbs: r.weight_lbs, bodyFatPct: r.body_fat_pct }))
+}
+
+export async function saveBodyMetric(
+  userId: string,
+  weekKey: string,
+  weightLbs: number | null,
+  bodyFatPct: number | null
+) {
+  const { error } = await supabase
+    .from("body_metrics")
+    .upsert({ user_id: userId, week_key: weekKey, weight_lbs: weightLbs, body_fat_pct: bodyFatPct }, { onConflict: "user_id,week_key" })
+  if (error) console.error("saveBodyMetric error:", error)
+}
+
 // ── Nutrition Logs ────────────────────────────────────────────────────────────
 
 export async function getNutritionLogs(userId: string): Promise<Record<string, any>> {
