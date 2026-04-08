@@ -60,15 +60,47 @@ export async function saveWorkoutLog(
   dayName: string,
   duration: string,
   exerciseCount: number,
-  timeElapsed: number
+  timeElapsed: number,
+  setData?: Record<string, Array<{ v1: string; v2: string }>>
 ) {
   const { error } = await supabase
     .from("workout_logs")
     .upsert(
-      { user_id: userId, log_date: logDate, day_name: dayName, duration, exercise_count: exerciseCount, time_elapsed: timeElapsed },
+      { user_id: userId, log_date: logDate, day_name: dayName, duration, exercise_count: exerciseCount, time_elapsed: timeElapsed, set_data: setData ?? null },
       { onConflict: "user_id,log_date" }
     )
   if (error) console.error("saveWorkoutLog error:", error)
+}
+
+// ── Set history (most recent logged sets per exercise) ────────────────────────
+
+export async function getLastSetData(
+  userId: string,
+  exerciseNames: string[]
+): Promise<Record<string, Array<{ v1: string; v2: string }>>> {
+  if (!exerciseNames.length) return {}
+  const { data, error } = await supabase
+    .from("workout_logs")
+    .select("log_date, set_data")
+    .eq("user_id", userId)
+    .not("set_data", "is", null)
+    .order("log_date", { ascending: false })
+    .limit(20)
+  if (error || !data) return {}
+
+  // Walk logs newest-first; for each exercise find the first entry that has it
+  const result: Record<string, Array<{ v1: string; v2: string }>> = {}
+  const normalise = (s: string) => s.toLowerCase().replace(/\s*\d+\s*[xX×]\s*\d+.*$/, "").trim()
+  for (const row of data) {
+    if (!row.set_data) continue
+    for (const exName of exerciseNames) {
+      if (result[exName]) continue
+      const key = Object.keys(row.set_data).find(k => normalise(k) === normalise(exName))
+      if (key) result[exName] = row.set_data[key]
+    }
+    if (Object.keys(result).length === exerciseNames.length) break
+  }
+  return result
 }
 
 // ── Nutrition Logs ────────────────────────────────────────────────────────────

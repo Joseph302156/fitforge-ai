@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useSession } from "@/hooks/useSession";
-import { getWorkoutPlan, saveWorkoutPlan, deleteWorkoutPlan, saveWorkoutLog, getWorkoutLogs } from "@/lib/supabase";
+import { getWorkoutPlan, saveWorkoutPlan, deleteWorkoutPlan, saveWorkoutLog, getWorkoutLogs, getLastSetData } from "@/lib/supabase";
 
 const DAY_COLORS: Record<string, { bg: string; text: string; badge: string; accent: string }> = {
   Monday:    { bg:"#eef2ff", text:"#4338ca", badge:"MON", accent:"#4f46e5" },
@@ -68,13 +68,38 @@ function metricFields(m:MetricType):{v1Label:string;v1Ph:string;v2Label?:string;
   return                     {v1Label:"sec",v1Ph:"0"};
 }
 
-function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void; onDone: (n:string,d:string,c:number,s:number)=>void }) {
+type SetHistory = Record<string, Array<{ v1: string; v2: string }>>;
+
+function nudgeText(metric: MetricType, sets: Array<{ v1: string; v2: string }>, goal: string): string {
+  if (!sets.length) return "";
+  if (metric === "weight_reps") {
+    const weights = sets.map(s => parseFloat(s.v1)).filter(n => !isNaN(n) && n > 0);
+    const reps    = sets.map(s => parseFloat(s.v2)).filter(n => !isNaN(n) && n > 0);
+    if (!weights.length) return "";
+    const avgW = weights.reduce((a,b)=>a+b,0)/weights.length;
+    const avgR = reps.length ? reps.reduce((a,b)=>a+b,0)/reps.length : 0;
+    if (goal.toLowerCase().includes("muscle") || goal.toLowerCase().includes("strength")) {
+      return `Try ${Math.round(avgW + 5)} lbs × ${Math.round(avgR)} reps to keep progressing 💪`;
+    }
+    return `Same weight is fine, or add ${Math.round(avgR + 1)} reps per set for a challenge`;
+  }
+  if (metric === "reps_only") {
+    const reps = sets.map(s => parseFloat(s.v1)).filter(n => !isNaN(n) && n > 0);
+    if (!reps.length) return "";
+    const avg = Math.round(reps.reduce((a,b)=>a+b,0)/reps.length);
+    return `Try ${avg + 2} reps per set to keep improving`;
+  }
+  return "";
+}
+
+function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; userId: string; goal: string; onClose: ()=>void; onDone: (n:string,d:string,c:number,s:number,setData:Record<string,Array<{v1:string;v2:string}>>) =>void }) {
   const c=DAY_COLORS[day.day]||{bg:"#f9fafb",text:"#6b7280",badge:"DAY",accent:"#6366f1"};
 
   const [exNames,setExNames]=useState<string[]>(day.exercises||[]);
   const [exStates,setExStates]=useState<ExState[]>(()=>
     (day.exercises||[]).map(ex=>({metric:detectMetric(ex),sets:Array(parseSetCount(ex)).fill(null).map(()=>({v1:"",v2:"",done:false}))}))
   );
+  const [history,setHistory]=useState<SetHistory>({});
   const [started,setStarted]=useState(false);
   const [secs,setSecs]=useState(0);
   const [done,setDone]=useState(false);
@@ -89,11 +114,39 @@ function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void;
   const doneSets=exStates.reduce((a,ex)=>a+ex.sets.filter(s=>s.done).length,0);
   const allDone=doneSets===totalSets&&totalSets>0;
 
+  // Load previous set data for all exercises
+  useEffect(()=>{
+    if(!userId||!exNames.length)return;
+    getLastSetData(userId,exNames).then(hist=>{
+      setHistory(hist);
+      // Pre-fill inputs with last session's values
+      setExStates(prev=>prev.map((ex,i)=>{
+        const prevSets=hist[exNames[i]];
+        if(!prevSets||!prevSets.length)return ex;
+        const sets=ex.sets.map((_,si)=>({
+          v1: prevSets[si]?.v1 ?? prevSets[prevSets.length-1]?.v1 ?? "",
+          v2: prevSets[si]?.v2 ?? prevSets[prevSets.length-1]?.v2 ?? "",
+          done: false,
+        }));
+        return {...ex,sets};
+      }));
+    });
+  },[userId]);
+
   useEffect(()=>{if(allDone&&started&&!done){const t=setTimeout(finish,800);return()=>clearTimeout(t);}},[allDone,started,done]);
   useEffect(()=>()=>{if(mainT.current)clearInterval(mainT.current);if(restT.current)clearInterval(restT.current);},[]);
 
+  function buildSetData():Record<string,Array<{v1:string;v2:string}>>{
+    const out:Record<string,Array<{v1:string;v2:string}>>={};
+    exNames.forEach((name,i)=>{
+      const logged=exStates[i].sets.filter(s=>s.done).map(s=>({v1:s.v1,v2:s.v2}));
+      if(logged.length)out[name]=logged;
+    });
+    return out;
+  }
+
   function start(){setStarted(true);mainT.current=setInterval(()=>setSecs(s=>s+1),1000);setExpanded(0);}
-  function finish(){if(mainT.current)clearInterval(mainT.current);if(restT.current)clearInterval(restT.current);setRest(null);setDone(true);onDone(day.name,day.duration||"",exNames.length,secs);}
+  function finish(){if(mainT.current)clearInterval(mainT.current);if(restT.current)clearInterval(restT.current);setRest(null);setDone(true);onDone(day.name,day.duration||"",exNames.length,secs,buildSetData());}
 
   function completeSet(exIdx:number,setIdx:number){
     setExStates(prev=>{const n=prev.map(ex=>({...ex,sets:ex.sets.map(s=>({...s}))}));n[exIdx].sets[setIdx].done=true;return n;});
@@ -223,7 +276,22 @@ function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void;
                     {/* Expanded set panel */}
                     {isOpen&&(
                       <div style={{borderTop:"1px solid #f3f4f6",padding:"12px",background:"white",display:"flex",flexDirection:"column",gap:"8px"}}>
-                        {!started&&<p style={{fontSize:"10px",color:"#9ca3af",margin:"0 0 2px"}}>Start workout to log sets · tap ✓ after each set</p>}
+                        {/* Previous session info + nudge */}
+                        {history[exName]&&(()=>{
+                          const prev=history[exName];
+                          const ml2=metricFields(ex.metric);
+                          const lastStr=ex.metric==="weight_reps"
+                            ? `${prev[0]?.v1} ${ml2.v1Label} × ${prev[0]?.v2} ${ml2.v2Label} · ${prev.length} set${prev.length!==1?"s":""}`
+                            : `${prev[0]?.v1} ${ml2.v1Label} · ${prev.length} set${prev.length!==1?"s":""}`;
+                          const nudge=nudgeText(ex.metric,prev,goal);
+                          return(
+                            <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:"8px",padding:"8px 10px",marginBottom:"2px"}}>
+                              <p style={{fontSize:"10px",color:"#15803d",fontWeight:600,margin:"0 0 2px"}}>Last time: {lastStr}</p>
+                              {nudge&&<p style={{fontSize:"10px",color:"#16a34a",margin:0}}>{nudge}</p>}
+                            </div>
+                          );
+                        })()}
+                        {!started&&<p style={{fontSize:"10px",color:"#9ca3af",margin:"0 0 2px"}}>Tap ✓ after each set to log it</p>}
                         {ex.sets.map((s,si)=>(
                           <div key={si} style={{display:"flex",alignItems:"center",gap:"8px"}}>
                             <span style={{width:"22px",fontSize:"10px",fontWeight:600,color:s.done?"#9ca3af":"#374151",flexShrink:0}}>S{si+1}</span>
@@ -417,9 +485,9 @@ export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkout
     catch{setError("Something went wrong. Please try again.");}
     finally{setLoading(false);}
   }
-  async function handleWorkoutComplete(n:string,d:string,c:number,s:number){
+  async function handleWorkoutComplete(n:string,d:string,c:number,s:number,setData:Record<string,Array<{v1:string;v2:string}>>){
     const updated={...workoutLog,[todayStr]:{dayName:n}};setWorkoutLog(updated);
-    await saveWorkoutLog(userId,todayStr,n,d,c,s);
+    await saveWorkoutLog(userId,todayStr,n,d,c,s,setData);
     onWorkoutComplete(n,d,c,s);setSessionDay(null);showToast("Workout logged!");
   }
   async function startOver(){await deleteWorkoutPlan(userId,weekKey);setPlan(null);setError("");setPrompt("");}
@@ -477,7 +545,7 @@ export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkout
         <div style={{maxWidth:"1000px",margin:"0 auto"}}>{loading?loadingSpinner:plan?planContent:buildContent}</div>
       </div>
       {editDay&&<EditModal day={editDay} onSave={d=>{updatePlan({...plan!,days:plan!.days.map(x=>x.day===d.day?d:x)});setEditDay(null);showToast("Day updated!");}} onClose={()=>setEditDay(null)}/>}
-      {sessionDay&&<WorkoutSession day={sessionDay} onClose={()=>setSessionDay(null)} onDone={handleWorkoutComplete}/>}
+      {sessionDay&&<WorkoutSession day={sessionDay} userId={userId} goal={goal} onClose={()=>setSessionDay(null)} onDone={handleWorkoutComplete}/>}
       <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}} @keyframes popIn{0%{transform:scale(0.6);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}`}</style>
     </div>
   );}
@@ -487,7 +555,7 @@ export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkout
       {header(plan?"Your weekly plan":"Build your week",plan?`${goal} · ${level} · tap today's workout to start`:"Powered by AI — just describe your situation")}
       <div style={{padding:"20px"}}>{loading?loadingSpinner:plan?planContent:buildContent}</div>
       {editDay&&<EditModal day={editDay} onSave={d=>{updatePlan({...plan!,days:plan!.days.map(x=>x.day===d.day?d:x)});setEditDay(null);showToast("Day updated!");}} onClose={()=>setEditDay(null)}/>}
-      {sessionDay&&<WorkoutSession day={sessionDay} onClose={()=>setSessionDay(null)} onDone={handleWorkoutComplete}/>}
+      {sessionDay&&<WorkoutSession day={sessionDay} userId={userId} goal={goal} onClose={()=>setSessionDay(null)} onDone={handleWorkoutComplete}/>}
       <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}} @keyframes popIn{0%{transform:scale(0.6);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}`}</style>
     </>
   );
