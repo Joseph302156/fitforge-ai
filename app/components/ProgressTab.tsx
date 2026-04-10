@@ -124,13 +124,7 @@ function computeVolume(logs: WorkoutLogFull[]): WeekVol[] {
     if (!map[wk]) map[wk] = { weekKey: wk, push: 0, pull: 0, legs: 0, cardio: 0, other: 0, total: 0 };
     for (const [rawName, sets] of Object.entries(log.setData)) {
       const cat = categorize(normEx(rawName));
-      const weight = isWeightEx(sets);
-      let vol = 0;
-      for (const s of sets) {
-        const v1 = parseFloat(s.v1) || 0;
-        const v2 = parseFloat(s.v2) || 0;
-        vol += weight ? v1 * v2 : v1;
-      }
+      const vol = sets.length;
       map[wk][cat] += vol;
       map[wk].total += vol;
     }
@@ -729,7 +723,7 @@ export default function ProgressTab({ isDesktop }: { isDesktop?: boolean }) {
 
       {/* Weekly Volume */}
       <div style={{ background: "white", borderRadius: "16px", border: "1px solid #f3f4f6", padding: "14px 16px", marginBottom: "12px" }}>
-        <SectionHeader title="Weekly Training Volume" sub="Sets × reps × weight · last 8 weeks" />
+        <SectionHeader title="Weekly Training Volume" sub="Total sets completed · last 8 weeks" />
         <WeeklyVolumeChart weeks={weeklyVolume} />
       </div>
 
