@@ -149,6 +149,30 @@ export async function saveNutritionLog(userId: string, logDate: string, meals: a
   if (error) console.error("saveNutritionLog error:", error)
 }
 
+// ── All workout logs (for progress charts) ───────────────────────────────────
+
+export type WorkoutLogFull = {
+  logDate: string;
+  exerciseCount: number;
+  timeElapsed: number;
+  setData: Record<string, Array<{ v1: string; v2: string }>> | null;
+};
+
+export async function getAllWorkoutLogs(userId: string): Promise<WorkoutLogFull[]> {
+  const { data, error } = await supabase
+    .from("workout_logs")
+    .select("log_date, exercise_count, time_elapsed, set_data")
+    .eq("user_id", userId)
+    .order("log_date", { ascending: true })
+  if (error || !data) return []
+  return data.map(r => ({
+    logDate: r.log_date,
+    exerciseCount: r.exercise_count ?? 0,
+    timeElapsed: r.time_elapsed ?? 0,
+    setData: r.set_data ?? null,
+  }))
+}
+
 // ── Nutrition Goals ───────────────────────────────────────────────────────────
 
 export async function getNutritionGoals(userId: string) {
