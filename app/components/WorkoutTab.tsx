@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useSession } from "@/hooks/useSession";
-import { getWorkoutPlan, saveWorkoutPlan, deleteWorkoutPlan, saveWorkoutLog, getWorkoutLogs } from "@/lib/supabase";
+import { getWorkoutPlan, saveWorkoutPlan, deleteWorkoutPlan, saveWorkoutLog, getWorkoutLogs, getLastSetData } from "@/lib/supabase";
 
 const DAY_COLORS: Record<string, { bg: string; text: string; badge: string; accent: string }> = {
   Monday:    { bg:"#eef2ff", text:"#4338ca", badge:"MON", accent:"#4f46e5" },
@@ -22,49 +22,346 @@ type Plan = { days: Day[]; tip?: string };
 function localDateStr(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 function getWeekKey() {
   const now = new Date();
-  const jan4 = new Date(now.getFullYear(),0,4);
-  const dayOfYear = Math.floor((now.getTime()-new Date(now.getFullYear(),0,0).getTime())/86400000);
-  const weekNum = Math.ceil((dayOfYear+jan4.getDay())/7);
-  return `${now.getFullYear()}-W${String(weekNum).padStart(2,"0")}`;
+  const day = now.getDay(); // 0=Sun
+  const daysFromMonday = day === 0 ? 6 : day - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysFromMonday);
+  return `${monday.getFullYear()}-${String(monday.getMonth()+1).padStart(2,"0")}-${String(monday.getDate()).padStart(2,"0")}`;
 }
 
-function WorkoutSession({ day, onClose, onDone }: { day: Day; onClose: ()=>void; onDone: (n:string,d:string,c:number,s:number)=>void }) {
-  const c = DAY_COLORS[day.day]||{bg:"#f9fafb",text:"#6b7280",badge:"DAY",accent:"#6366f1"};
+// ── Set tracking helpers ──────────────────────────────────────────
+const REST_SECS = 90;
+const RING_CIRC = 100.5; // 2π×16
+
+type MetricType = "weight_reps"|"reps_only"|"distance"|"laps"|"timed";
+type SetEntry = { v1:string; v2:string; done:boolean };
+type ExState  = { sets:SetEntry[]; metric:MetricType };
+type RestInfo = { secsLeft:number; exIdx:number; setIdx:number };
+
+function parseSetCount(ex:string):number {
+  const m=ex.match(/(\d+)\s*[xX×]\s*\d+/);
+  if(m)return Math.min(Math.max(parseInt(m[1]),1),8);
+  return 3;
+}
+
+function detectMetric(ex:string):MetricType {
+  const s=ex.toLowerCase();
+  // Explicit equipment keyword → always weight+reps (checked first so "dumbbell row" isn't caught as cardio)
+  if(/\b(barbell|dumbbell|db|cable|kettlebell|kb|ez.?bar|trap.?bar|smith|landmine)\b/.test(s))return"weight_reps";
+  // Cardio / distance
+  if(/\b(running|sprints?|jogging|biking|cycling|treadmill)\b/.test(s))return"distance";
+  if(/\brun\b/.test(s)||/\bbike\b/.test(s)||/\bcycle\b/.test(s))return"distance";
+  // Swimming
+  if(/\b(swim|swimming|freestyle|backstroke|breaststroke|laps?)\b/.test(s))return"laps";
+  // Timed holds
+  if(/\b(plank|wall.?sit|isometric|dead.?hang|farmer.?carry|suitcase.?carry|hollow.?hold)\b/.test(s))return"timed";
+  // Bodyweight / calisthenics — reps only (no weight field)
+  if(/\b(push.?ups?|pull.?ups?|chin.?ups?|sit.?ups?|crunches?|burpees?|jumping.?jacks?|mountain.?climbers?|leg.?raises?|v.?ups?|flutter.?kicks?|dips?|lunges?|step.?ups?|box.?jumps?|jump.?rope|skipping|air.?squats?|bodyweight|body.?weight|pike.?push|inverted.?row|ring.?row|ring.?push|muscle.?up|handstand)\b/.test(s))return"reps_only";
+  return"weight_reps";
+}
+
+function metricFields(m:MetricType):{v1Label:string;v1Ph:string;v2Label?:string;v2Ph?:string} {
+  if(m==="weight_reps")return{v1Label:"lbs",v1Ph:"0",v2Label:"reps",v2Ph:"0"};
+  if(m==="reps_only")  return{v1Label:"reps",v1Ph:"0"};
+  if(m==="distance")   return{v1Label:"mi",v1Ph:"0.0"};
+  if(m==="laps")       return{v1Label:"laps",v1Ph:"0"};
+  return                     {v1Label:"sec",v1Ph:"0"};
+}
+
+type SetHistory = Record<string, Array<{ v1: string; v2: string }>>;
+
+function nudgeText(metric: MetricType, sets: Array<{ v1: string; v2: string }>, goal: string): string {
+  if (!sets.length) return "";
+  if (metric === "weight_reps") {
+    const weights = sets.map(s => parseFloat(s.v1)).filter(n => !isNaN(n) && n > 0);
+    const reps    = sets.map(s => parseFloat(s.v2)).filter(n => !isNaN(n) && n > 0);
+    if (!weights.length) return "";
+    const avgW = weights.reduce((a,b)=>a+b,0)/weights.length;
+    const avgR = reps.length ? reps.reduce((a,b)=>a+b,0)/reps.length : 0;
+    if (goal.toLowerCase().includes("muscle") || goal.toLowerCase().includes("strength")) {
+      return `Try ${Math.round(avgW + 5)} lbs × ${Math.round(avgR)} reps to keep progressing 💪`;
+    }
+    return `Same weight is fine, or add ${Math.round(avgR + 1)} reps per set for a challenge`;
+  }
+  if (metric === "reps_only") {
+    const reps = sets.map(s => parseFloat(s.v1)).filter(n => !isNaN(n) && n > 0);
+    if (!reps.length) return "";
+    const avg = Math.round(reps.reduce((a,b)=>a+b,0)/reps.length);
+    return `Try ${avg + 2} reps per set to keep improving`;
+  }
+  return "";
+}
+
+function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; userId: string; goal: string; onClose: ()=>void; onDone: (n:string,d:string,c:number,s:number,setData:Record<string,Array<{v1:string;v2:string}>>) =>void }) {
+  const c=DAY_COLORS[day.day]||{bg:"#f9fafb",text:"#6b7280",badge:"DAY",accent:"#6366f1"};
+
+  const [exNames,setExNames]=useState<string[]>(day.exercises||[]);
+  const [exStates,setExStates]=useState<ExState[]>(()=>
+    (day.exercises||[]).map(ex=>({metric:detectMetric(ex),sets:Array(parseSetCount(ex)).fill(null).map(()=>({v1:"",v2:"",done:false}))}))
+  );
+  const [history,setHistory]=useState<SetHistory>({});
   const [started,setStarted]=useState(false);
   const [secs,setSecs]=useState(0);
-  const [checked,setChecked]=useState<boolean[]>(Array(day.exercises?.length||0).fill(false));
   const [done,setDone]=useState(false);
-  const timer=useRef<ReturnType<typeof setInterval>|null>(null);
-  const completed=checked.filter(Boolean).length;
-  const allDone=completed===checked.length&&checked.length>0;
-  useEffect(()=>{if(allDone&&started&&!done)setTimeout(finish,600);},[checked]);
-  useEffect(()=>()=>{if(timer.current)clearInterval(timer.current);},[]);
-  function start(){setStarted(true);timer.current=setInterval(()=>setSecs(s=>s+1),1000);}
-  function finish(){if(timer.current)clearInterval(timer.current);setDone(true);onDone(day.name,day.duration||"",day.exercises?.length||0,secs);}
-  function toggle(i:number){if(!started||done)return;setChecked(p=>{const u=[...p];u[i]=!u[i];return u;});}
+  const [expanded,setExpanded]=useState<number|null>(null);
+  const [rest,setRest]=useState<RestInfo|null>(null);
+  const [confirmEnd,setConfirmEnd]=useState(false);
+  const [newEx,setNewEx]=useState("");
+  const mainT=useRef<ReturnType<typeof setInterval>|null>(null);
+  const restT=useRef<ReturnType<typeof setInterval>|null>(null);
+
+  const totalSets=exStates.reduce((a,ex)=>a+ex.sets.length,0);
+  const doneSets=exStates.reduce((a,ex)=>a+ex.sets.filter(s=>s.done).length,0);
+  const allDone=doneSets===totalSets&&totalSets>0;
+
+  // Load previous set data for all exercises
+  useEffect(()=>{
+    if(!userId||!exNames.length)return;
+    getLastSetData(userId,exNames).then(hist=>{
+      setHistory(hist);
+      // Pre-fill inputs with last session's values
+      setExStates(prev=>prev.map((ex,i)=>{
+        const prevSets=hist[exNames[i]];
+        if(!prevSets||!prevSets.length)return ex;
+        const sets=ex.sets.map((_,si)=>({
+          v1: prevSets[si]?.v1 ?? prevSets[prevSets.length-1]?.v1 ?? "",
+          v2: prevSets[si]?.v2 ?? prevSets[prevSets.length-1]?.v2 ?? "",
+          done: false,
+        }));
+        return {...ex,sets};
+      }));
+    });
+  },[userId]);
+
+  useEffect(()=>{if(allDone&&started&&!done){const t=setTimeout(finish,800);return()=>clearTimeout(t);}},[allDone,started,done]);
+  useEffect(()=>()=>{if(mainT.current)clearInterval(mainT.current);if(restT.current)clearInterval(restT.current);},[]);
+
+  function buildSetData():Record<string,Array<{v1:string;v2:string}>>{
+    const out:Record<string,Array<{v1:string;v2:string}>>={};
+    exNames.forEach((name,i)=>{
+      const logged=exStates[i].sets.filter(s=>s.done).map(s=>({v1:s.v1,v2:s.v2}));
+      if(logged.length)out[name]=logged;
+    });
+    return out;
+  }
+
+  function start(){setStarted(true);mainT.current=setInterval(()=>setSecs(s=>s+1),1000);setExpanded(0);}
+  function finish(){if(mainT.current)clearInterval(mainT.current);if(restT.current)clearInterval(restT.current);setRest(null);setDone(true);onDone(day.name,day.duration||"",exNames.length,secs,buildSetData());}
+
+  function completeSet(exIdx:number,setIdx:number){
+    setExStates(prev=>{const n=prev.map(ex=>({...ex,sets:ex.sets.map(s=>({...s}))}));n[exIdx].sets[setIdx].done=true;return n;});
+    if(restT.current)clearInterval(restT.current);
+    setRest({secsLeft:REST_SECS,exIdx,setIdx});
+    restT.current=setInterval(()=>setRest(p=>{if(!p)return null;if(p.secsLeft<=1){clearInterval(restT.current!);return null;}return{...p,secsLeft:p.secsLeft-1};}),1000);
+  }
+
+  function skipRest(){if(restT.current)clearInterval(restT.current);setRest(null);}
+
+  function updateSet(exIdx:number,setIdx:number,field:"v1"|"v2",val:string){
+    setExStates(prev=>{const n=prev.map(ex=>({...ex,sets:ex.sets.map(s=>({...s}))}));n[exIdx].sets[setIdx][field]=val;return n;});
+  }
+
+  function adjustSets(exIdx:number,delta:number){
+    setExStates(prev=>{
+      const n=prev.map(ex=>({...ex,sets:ex.sets.map(s=>({...s}))}));
+      const ex=n[exIdx];
+      const nc=Math.min(Math.max(ex.sets.length+delta,1),8);
+      if(nc>ex.sets.length){for(let i=ex.sets.length;i<nc;i++)ex.sets.push({v1:"",v2:"",done:false});}
+      else{ex.sets=ex.sets.slice(0,nc);}
+      return n;
+    });
+  }
+
+  function deleteExercise(exIdx:number){
+    setExNames(prev=>prev.filter((_,i)=>i!==exIdx));
+    setExStates(prev=>prev.filter((_,i)=>i!==exIdx));
+    if(expanded===exIdx)setExpanded(null);
+    else if(expanded!==null&&expanded>exIdx)setExpanded(expanded-1);
+  }
+
+  function addExercise(){
+    const name=newEx.trim();
+    if(!name)return;
+    setExNames(prev=>[...prev,name]);
+    setExStates(prev=>[...prev,{metric:detectMetric(name),sets:Array(3).fill(null).map(()=>({v1:"",v2:"",done:false}))}]);
+    setNewEx("");
+    // Auto-expand the newly added exercise
+    setExpanded(exNames.length);
+  }
+
+  function getNextLabel(exIdx:number,setIdx:number):string {
+    const ex=exStates[exIdx];
+    if(setIdx<ex.sets.length-1)return`Set ${setIdx+2} of ${ex.sets.length}`;
+    if(exIdx<exStates.length-1){const nm=exNames[exIdx+1].replace(/\s*\d+\s*[xX×]\s*\d+.*$/,"").trim();return nm.length>22?nm.slice(0,20)+"…":nm;}
+    return"Final set!";
+  }
+
   function fmt(s:number){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;return h>0?`${h}:${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`:`${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`;}
+
   return (
     <div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"16px",background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)"}}>
       <div style={{width:"100%",maxWidth:"384px",background:"white",borderRadius:"24px",overflow:"hidden",maxHeight:"90vh",display:"flex",flexDirection:"column",animation:"slideUp 0.3s ease forwards"}}>
+
+        {/* ── Header ── */}
         <div style={{background:"#1a1a2e",padding:"20px 20px 16px",flexShrink:0}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"16px"}}>
             <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
               <div style={{width:"40px",height:"40px",borderRadius:"10px",background:c.bg,color:c.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:700,flexShrink:0}}>{c.badge}</div>
-              <div><p style={{color:"white",fontSize:"14px",fontWeight:500,margin:0}}>{day.name}</p><p style={{color:"rgba(255,255,255,0.4)",fontSize:"11px",margin:"2px 0 0"}}>{day.duration} · {day.exercises?.length} exercises</p></div>
+              <div><p style={{color:"white",fontSize:"14px",fontWeight:500,margin:0}}>{day.name}</p><p style={{color:"rgba(255,255,255,0.4)",fontSize:"11px",margin:"2px 0 0"}}>{day.duration} · {exNames.length} exercises</p></div>
             </div>
             {!started&&<button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",fontSize:"20px",cursor:"pointer",lineHeight:1}}>✕</button>}
           </div>
-          <div style={{textAlign:"center",padding:"12px 0"}}>
+          <div style={{textAlign:"center",padding:"10px 0 4px"}}>
             <div style={{fontFamily:"monospace",fontSize:"40px",fontWeight:700,color:"white",letterSpacing:"4px"}}>{fmt(secs)}</div>
             <p style={{color:"rgba(255,255,255,0.35)",fontSize:"11px",margin:"4px 0 0"}}>{!started?"Ready to start":done?"Workout complete":"Time elapsed"}</p>
           </div>
-          {started&&!done&&<><div style={{background:"rgba(255,255,255,0.1)",borderRadius:"99px",height:"6px",overflow:"hidden",marginTop:"8px"}}><div style={{height:"100%",borderRadius:"99px",background:c.accent,width:`${(completed/checked.length)*100}%`,transition:"width 0.5s"}}/></div><p style={{color:"rgba(255,255,255,0.35)",fontSize:"10px",textAlign:"center",margin:"6px 0 0"}}>{completed} of {checked.length} done</p></>}
+          {started&&!done&&<><div style={{background:"rgba(255,255,255,0.1)",borderRadius:"99px",height:"5px",overflow:"hidden",marginTop:"10px"}}><div style={{height:"100%",borderRadius:"99px",background:"#22c55e",width:`${(doneSets/totalSets)*100}%`,transition:"width 0.5s"}}/></div><p style={{color:"rgba(255,255,255,0.3)",fontSize:"10px",textAlign:"center",margin:"5px 0 0"}}>{doneSets} of {totalSets} sets done</p></>}
         </div>
-        {!done&&<div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}><p style={{fontSize:"10px",fontWeight:600,color:"#9ca3af",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"12px"}}>Exercises</p><div style={{display:"flex",flexDirection:"column",gap:"8px"}}>{day.exercises?.map((ex,i)=><button key={i} onClick={()=>toggle(i)} disabled={!started||done} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px",borderRadius:"12px",border:checked[i]?"1px solid #bbf7d0":"1px solid #f3f4f6",background:checked[i]?"#f0fdf4":"#f9fafb",cursor:started&&!done?"pointer":"default",textAlign:"left",opacity:!started?0.6:1}}><div style={{width:"20px",height:"20px",borderRadius:"50%",border:checked[i]?"2px solid #22c55e":"2px solid #d1d5db",background:checked[i]?"#22c55e":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{checked[i]&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}</div><span style={{fontSize:"12px",color:checked[i]?"#16a34a":"#374151",textDecoration:checked[i]?"line-through":"none",flex:1}}>{ex}</span></button>)}</div></div>}
-        {done&&<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 20px",textAlign:"center"}}><div style={{width:"64px",height:"64px",borderRadius:"50%",background:"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:"16px",animation:"popIn 0.4s ease forwards"}}><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><h3 style={{fontSize:"18px",fontWeight:600,color:"#1f2937",margin:"0 0 4px"}}>{allDone?"Workout complete!":"Good effort!"}</h3><p style={{fontSize:"12px",color:"#9ca3af",margin:"0 0 8px"}}>{allDone?`You crushed all ${day.exercises?.length} exercises`:`Completed ${completed} of ${day.exercises?.length}`}</p><p style={{fontFamily:"monospace",fontSize:"28px",fontWeight:700,color:"#374151",margin:"8px 0 4px"}}>{fmt(secs)}</p><p style={{fontSize:"10px",color:"#9ca3af"}}>Total time</p></div>}
+
+        {/* ── Rest timer banner ── */}
+        {rest&&(
+          <div style={{background:"#f0fdf4",borderBottom:"1px solid #bbf7d0",padding:"10px 16px",display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
+            <div style={{width:"38px",height:"38px",position:"relative",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width="38" height="38" viewBox="0 0 38 38" style={{position:"absolute",top:0,left:0}}>
+                <circle cx="19" cy="19" r="16" fill="none" stroke="#bbf7d0" strokeWidth="3"/>
+                <circle cx="19" cy="19" r="16" fill="none" stroke="#22c55e" strokeWidth="3"
+                  strokeDasharray={RING_CIRC} strokeDashoffset={RING_CIRC*(1-rest.secsLeft/REST_SECS)}
+                  strokeLinecap="round" transform="rotate(-90 19 19)" style={{transition:"stroke-dashoffset 1s linear"}}/>
+              </svg>
+              <span style={{color:"#15803d",fontSize:"11px",fontWeight:700,fontFamily:"monospace",position:"relative",zIndex:1}}>{rest.secsLeft}</span>
+            </div>
+            <div style={{flex:1}}>
+              <p style={{color:"#15803d",fontSize:"12px",fontWeight:600,margin:0}}>Rest — Set {rest.setIdx+1} complete ✓</p>
+              <p style={{color:"#16a34a",fontSize:"10px",margin:"2px 0 0"}}>Next: {getNextLabel(rest.exIdx,rest.setIdx)}</p>
+            </div>
+            <button onClick={skipRest} style={{color:"#15803d",fontSize:"11px",fontWeight:500,background:"white",border:"1px solid #bbf7d0",borderRadius:"8px",padding:"5px 10px",cursor:"pointer"}}>Skip →</button>
+          </div>
+        )}
+
+        {/* ── Exercise list ── */}
+        {!done&&(
+          <div style={{flex:1,overflowY:"auto",padding:"14px 16px"}}>
+            <p style={{fontSize:"10px",fontWeight:600,color:"#9ca3af",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"8px"}}>Exercises</p>
+            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+              {exNames.map((exName,exIdx)=>{
+                const ex=exStates[exIdx];
+                const exDone=ex.sets.every(s=>s.done)&&ex.sets.length>0;
+                const isOpen=expanded===exIdx;
+                const ml=metricFields(ex.metric);
+                const cleanName=exName.replace(/\s*\d+\s*[xX×]\s*\d+.*$/,"").trim()||exName;
+                return(
+                  <div key={exIdx} style={{borderRadius:"12px",border:`1.5px solid ${exDone?"#bbf7d0":isOpen?"#e5e7eb":"#f3f4f6"}`,overflow:"hidden",background:exDone?"#f0fdf4":"#fafafa"}}>
+                    {/* Collapsed header */}
+                    <div onClick={()=>setExpanded(isOpen?null:exIdx)} style={{display:"flex",alignItems:"center",gap:"10px",padding:"11px 12px",cursor:"pointer"}}>
+                      <div style={{width:"32px",height:"32px",borderRadius:"8px",background:exDone?"#dcfce7":"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:"10px",fontWeight:700,color:exDone?"#15803d":"#9ca3af"}}>
+                        {exDone?"✓":`${ex.sets.length}×`}
+                      </div>
+                      <p style={{flex:1,fontSize:"12px",fontWeight:500,color:exDone?"#15803d":"#1f2937",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cleanName}</p>
+                      {/* Delete exercise button */}
+                      {!done&&<button onClick={e=>{e.stopPropagation();deleteExercise(exIdx);}} style={{width:"18px",height:"18px",borderRadius:"50%",border:"1px solid #fecaca",background:"#fef2f2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",color:"#ef4444",fontSize:"11px",lineHeight:1}}>×</button>}
+                      {/* +/- set count controls + dots */}
+                      <div style={{display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
+                        <button onClick={e=>{e.stopPropagation();adjustSets(exIdx,-1);}} disabled={ex.sets.length<=1} style={{width:"16px",height:"16px",borderRadius:"50%",border:"1px solid #e5e7eb",background:"white",fontSize:"11px",color:"#9ca3af",cursor:ex.sets.length<=1?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,lineHeight:1,opacity:ex.sets.length<=1?0.3:1}}>−</button>
+                        <div style={{display:"flex",gap:"3px",alignItems:"center"}}>
+                          {ex.sets.map((s,si)=>(
+                            <div key={si} style={{width:"9px",height:"9px",borderRadius:"50%",background:s.done?"#22c55e":"#e5e7eb"}}/>
+                          ))}
+                        </div>
+                        <button onClick={e=>{e.stopPropagation();adjustSets(exIdx,1);}} disabled={ex.sets.length>=8} style={{width:"16px",height:"16px",borderRadius:"50%",border:"1px solid #e5e7eb",background:"white",fontSize:"11px",color:"#9ca3af",cursor:ex.sets.length>=8?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,lineHeight:1,opacity:ex.sets.length>=8?0.3:1}}>+</button>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{transform:isOpen?"rotate(180deg)":"rotate(0)",transition:"transform 0.2s",marginLeft:"2px"}}>
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </div>
+                    </div>
+                    {/* Expanded set panel */}
+                    {isOpen&&(
+                      <div style={{borderTop:"1px solid #f3f4f6",padding:"12px",background:"white",display:"flex",flexDirection:"column",gap:"8px"}}>
+                        {/* Previous session info + nudge */}
+                        {history[exName]&&(()=>{
+                          const prev=history[exName];
+                          const ml2=metricFields(ex.metric);
+                          const lastStr=ex.metric==="weight_reps"
+                            ? `${prev[0]?.v1} ${ml2.v1Label} × ${prev[0]?.v2} ${ml2.v2Label} · ${prev.length} set${prev.length!==1?"s":""}`
+                            : `${prev[0]?.v1} ${ml2.v1Label} · ${prev.length} set${prev.length!==1?"s":""}`;
+                          const nudge=nudgeText(ex.metric,prev,goal);
+                          return(
+                            <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:"8px",padding:"8px 10px",marginBottom:"2px"}}>
+                              <p style={{fontSize:"10px",color:"#15803d",fontWeight:600,margin:"0 0 2px"}}>Last time: {lastStr}</p>
+                              {nudge&&<p style={{fontSize:"10px",color:"#16a34a",margin:0}}>{nudge}</p>}
+                            </div>
+                          );
+                        })()}
+                        {!started&&<p style={{fontSize:"10px",color:"#9ca3af",margin:"0 0 2px"}}>Tap ✓ after each set to log it</p>}
+                        {ex.sets.map((s,si)=>(
+                          <div key={si} style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                            <span style={{width:"22px",fontSize:"10px",fontWeight:600,color:s.done?"#9ca3af":"#374151",flexShrink:0}}>S{si+1}</span>
+                            <div style={{display:"flex",alignItems:"center",gap:"5px",flex:1}}>
+                              <input value={s.v1} onChange={e=>updateSet(exIdx,si,"v1",e.target.value)} placeholder={ml.v1Ph} disabled={s.done||!started} type="number" inputMode="decimal"
+                                style={{width:"52px",background:s.done?"#f0fdf4":"#f9fafb",border:`1px solid ${s.done?"#bbf7d0":"#e5e7eb"}`,borderRadius:"8px",padding:"6px 8px",fontSize:"12px",color:s.done?"#15803d":"#374151",textAlign:"center",outline:"none"}}/>
+                              <span style={{fontSize:"10px",color:"#9ca3af"}}>{ml.v1Label}</span>
+                              {ml.v2Label&&<>
+                                <span style={{fontSize:"11px",color:"#d1d5db"}}>×</span>
+                                <input value={s.v2} onChange={e=>updateSet(exIdx,si,"v2",e.target.value)} placeholder={ml.v2Ph} disabled={s.done||!started} type="number" inputMode="numeric"
+                                  style={{width:"52px",background:s.done?"#f0fdf4":"#f9fafb",border:`1px solid ${s.done?"#bbf7d0":"#e5e7eb"}`,borderRadius:"8px",padding:"6px 8px",fontSize:"12px",color:s.done?"#15803d":"#374151",textAlign:"center",outline:"none"}}/>
+                                <span style={{fontSize:"10px",color:"#9ca3af"}}>{ml.v2Label}</span>
+                              </>}
+                            </div>
+                            <button onClick={()=>{if(started&&!s.done&&!rest)completeSet(exIdx,si);}} disabled={!started||s.done||!!rest}
+                              style={{width:"30px",height:"30px",borderRadius:"50%",border:s.done?"none":"1.5px solid #d1d5db",background:s.done?"#22c55e":"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",cursor:started&&!s.done&&!rest?"pointer":"default",flexShrink:0,opacity:rest&&!s.done?0.4:1}}>
+                              {s.done&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {/* ── Add exercise ── */}
+            {!done&&(
+              <div style={{display:"flex",gap:"8px",marginTop:"12px"}}>
+                <input
+                  value={newEx}
+                  onChange={e=>setNewEx(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&addExercise()}
+                  placeholder="Add exercise..."
+                  style={{flex:1,fontSize:"12px",background:"#f9fafb",border:"1px dashed #d1d5db",borderRadius:"10px",padding:"9px 12px",color:"#374151",outline:"none"}}
+                />
+                <button onClick={addExercise} disabled={!newEx.trim()} style={{background:newEx.trim()?"#1a1a2e":"#f3f4f6",color:newEx.trim()?"white":"#d1d5db",border:"none",borderRadius:"10px",padding:"9px 14px",fontSize:"12px",fontWeight:500,cursor:newEx.trim()?"pointer":"default",flexShrink:0,transition:"background 0.15s"}}>+ Add</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Done screen ── */}
+        {done&&(
+          <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 20px",textAlign:"center"}}>
+            <div style={{width:"64px",height:"64px",borderRadius:"50%",background:"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:"16px",animation:"popIn 0.4s ease forwards"}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <h3 style={{fontSize:"18px",fontWeight:600,color:"#1f2937",margin:"0 0 4px"}}>Workout complete!</h3>
+            <p style={{fontSize:"12px",color:"#9ca3af",margin:"0 0 8px"}}>{doneSets} of {totalSets} sets logged</p>
+            <p style={{fontFamily:"monospace",fontSize:"28px",fontWeight:700,color:"#374151",margin:"8px 0 4px"}}>{fmt(secs)}</p>
+            <p style={{fontSize:"10px",color:"#9ca3af"}}>Total time</p>
+          </div>
+        )}
+
+        {/* ── Footer ── */}
         <div style={{padding:"8px 20px 20px",flexShrink:0,display:"flex",flexDirection:"column",gap:"8px"}}>
           {!started&&<button onClick={start} style={{width:"100%",background:c.accent,color:"white",border:"none",borderRadius:"16px",padding:"14px",fontSize:"14px",fontWeight:500,cursor:"pointer"}}>Start workout</button>}
-          {started&&!done&&<button onClick={finish} style={{width:"100%",background:"#1f2937",color:"white",border:"none",borderRadius:"16px",padding:"14px",fontSize:"14px",fontWeight:500,cursor:"pointer"}}>End workout</button>}
+          {started&&!done&&!confirmEnd&&(
+            <button onClick={()=>{if(doneSets<totalSets)setConfirmEnd(true);else finish();}} style={{width:"100%",background:"#1f2937",color:"white",border:"none",borderRadius:"16px",padding:"14px",fontSize:"14px",fontWeight:500,cursor:"pointer"}}>End workout</button>
+          )}
+          {confirmEnd&&(
+            <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:"14px",padding:"12px 14px"}}>
+              <p style={{fontSize:"12px",color:"#c2410c",fontWeight:500,margin:"0 0 10px"}}>⚠️ {totalSets-doneSets} set{totalSets-doneSets!==1?"s":""} still remaining — end workout anyway?</p>
+              <div style={{display:"flex",gap:"8px"}}>
+                <button onClick={finish} style={{flex:1,background:"#1f2937",color:"white",border:"none",borderRadius:"10px",padding:"10px",fontSize:"12px",fontWeight:500,cursor:"pointer"}}>Yes, end it</button>
+                <button onClick={()=>setConfirmEnd(false)} style={{flex:1,background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"12px",cursor:"pointer"}}>Keep going</button>
+              </div>
+            </div>
+          )}
           {done&&<button onClick={onClose} style={{width:"100%",background:c.accent,color:"white",border:"none",borderRadius:"16px",padding:"14px",fontSize:"14px",fontWeight:500,cursor:"pointer"}}>Done</button>}
           {!done&&<button onClick={onClose} style={{width:"100%",background:"transparent",color:"#9ca3af",border:"1px solid #e5e7eb",borderRadius:"16px",padding:"10px",fontSize:"12px",cursor:"pointer"}}>{started?"Minimize":"Cancel"}</button>}
         </div>
@@ -109,7 +406,7 @@ function DayCard({ day, onEdit, onStart, isCompleted, isToday }: { day:Day; onEd
   return <div onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} onClick={()=>{if(isToday)onStart(day);}} style={{background:"#f9fafb",borderRadius:"12px",border:hovered&&isToday?"1px solid #e5e7eb":"1px solid #f3f4f6",cursor:isToday?"pointer":"default",transition:"border-color 0.15s",opacity:isToday?1:0.75}}><div style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 12px 8px"}}><div style={{width:"36px",height:"36px",borderRadius:"8px",background:c.bg,color:c.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:500,flexShrink:0}}>{c.badge}</div><div style={{flex:1,minWidth:0}}><p style={{fontSize:"12px",fontWeight:500,color:"#1f2937",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{day.name}</p><p style={{fontSize:"10px",color:"#9ca3af",margin:"2px 0 0"}}>{day.duration} · {day.exercises?.length} exercises</p>{!isToday&&<p style={{fontSize:"10px",color:"#f59e0b",margin:"2px 0 0"}}>available on {day.day}</p>}</div><div style={{display:"flex",alignItems:"center",gap:"6px"}}><button onClick={e=>{e.stopPropagation();onEdit(day);}} style={{width:"28px",height:"28px",borderRadius:"8px",border:"1px solid #e5e7eb",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:hovered?1:0,transition:"opacity 0.15s",color:"#d1d5db"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>{isToday&&<div style={{width:"28px",height:"28px",display:"flex",alignItems:"center",justifyContent:"center",color:hovered?"#6b7280":"#d1d5db"}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>}</div></div><div style={{borderLeft:"2px solid #e5e7eb",marginLeft:"16px",paddingLeft:"12px",paddingBottom:"12px",display:"flex",flexDirection:"column",gap:"4px"}}>{day.exercises?.map((ex,i)=><p key={i} style={{fontSize:"10px",color:"#6b7280",margin:0}}>{ex}</p>)}</div></div>;
 }
 
-function ChatBox({ plan, goal, level, onPlanUpdate }: { plan:Plan; goal:string; level:string; onPlanUpdate:(p:Plan)=>void }) {
+function ChatBox({ plan, goal, level, currentDay, pastDays, userPrompt, onPlanUpdate }: { plan:Plan; goal:string; level:string; currentDay:string; pastDays:string[]; userPrompt:string; onPlanUpdate:(p:Plan)=>void }) {
   const [msgs,setMsgs]=useState([{role:"assistant",text:"Hey! I'm your AI trainer. Ask me anything about your plan.",updated:false}]);
   const [input,setInput]=useState("");const [loading,setLoading]=useState(false);const [open,setOpen]=useState(false);
   const bottomRef=useRef<HTMLDivElement>(null);
@@ -119,7 +416,7 @@ function ChatBox({ plan, goal, level, onPlanUpdate }: { plan:Plan; goal:string; 
     setInput("");setLoading(true);
     const next=[...msgs,{role:"user",text:t,updated:false}];setMsgs(next);
     const summary=plan.days.map(d=>d.type==="rest"?`${d.day}: Rest`:`${d.day}: ${d.name} (${d.duration}) — ${d.exercises?.join(", ")}`).join("\n");
-    try{const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,planSummary:summary,messages:next.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.text}))})});const data=await res.json();if(data.updatedPlan){onPlanUpdate(data.updatedPlan);setMsgs(p=>[...p,{role:"assistant",text:data.message||"Plan updated!",updated:true}]);}else setMsgs(p=>[...p,{role:"assistant",text:data.message||"Let me know if you need changes!",updated:false}]);}
+    try{const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,planSummary:summary,currentDay,pastDays,userPrompt,messages:next.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.text}))})});const data=await res.json();if(data.updatedPlan){onPlanUpdate(data.updatedPlan);setMsgs(p=>[...p,{role:"assistant",text:data.message||"Plan updated!",updated:true}]);}else setMsgs(p=>[...p,{role:"assistant",text:data.message||"Let me know if you need changes!",updated:false}]);}
     catch{setMsgs(p=>[...p,{role:"assistant",text:"Sorry, something went wrong.",updated:false}]);}
     finally{setLoading(false);}
   }
@@ -188,9 +485,9 @@ export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkout
     catch{setError("Something went wrong. Please try again.");}
     finally{setLoading(false);}
   }
-  async function handleWorkoutComplete(n:string,d:string,c:number,s:number){
+  async function handleWorkoutComplete(n:string,d:string,c:number,s:number,setData:Record<string,Array<{v1:string;v2:string}>>){
     const updated={...workoutLog,[todayStr]:{dayName:n}};setWorkoutLog(updated);
-    await saveWorkoutLog(userId,todayStr,n,d,c,s);
+    await saveWorkoutLog(userId,todayStr,n,d,c,s,setData);
     onWorkoutComplete(n,d,c,s);setSessionDay(null);showToast("Workout logged!");
   }
   async function startOver(){await deleteWorkoutPlan(userId,weekKey);setPlan(null);setError("");setPrompt("");}
@@ -217,7 +514,7 @@ export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkout
       {toast&&<div style={{marginBottom:"12px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:"12px",padding:"10px 16px",fontSize:"12px",color:"#16a34a",textAlign:"center",fontWeight:500}}>{toast}</div>}
       {plan?.tip&&<div style={{background:"#eef2ff",borderRadius:"12px",padding:"12px",marginBottom:"16px"}}><p style={{fontSize:"10px",color:"#4f46e5",fontWeight:500,margin:"0 0 4px"}}>AI tip for you</p><p style={{fontSize:"12px",color:"#3730a3",lineHeight:1.6,margin:0}}>{plan.tip}</p></div>}
       <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-        {plan?.days.map(day=>{
+        {plan?.days.filter((_,i)=>i>=currentDayIndex).map(day=>{
           const dows=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
           const di=dows.indexOf(day.day);const ci=dows.indexOf(currentDayName);
           const diff=di-ci;const dd=new Date(today);dd.setDate(today.getDate()+diff);
@@ -227,7 +524,7 @@ export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkout
           return <DayCard key={day.day} day={day} onEdit={d=>setEditDay(d)} onStart={d=>{if(!isComp)setSessionDay(d);}} isCompleted={isComp} isToday={isToday}/>;
         })}
       </div>
-      <ChatBox plan={plan!} goal={goal} level={level} onPlanUpdate={p=>{updatePlan(p);showToast("Plan updated!");}}/>
+      <ChatBox plan={plan!} goal={goal} level={level} currentDay={currentDayName} pastDays={pastDays} userPrompt={prompt} onPlanUpdate={p=>{updatePlan(p);showToast("Plan updated!");}}/>
       <button onClick={startOver} style={{width:"100%",marginTop:"12px",background:"transparent",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"10px",fontSize:"12px",color:"#9ca3af",cursor:"pointer"}}>← Start over</button>
     </>
   );
@@ -248,7 +545,7 @@ export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkout
         <div style={{maxWidth:"1000px",margin:"0 auto"}}>{loading?loadingSpinner:plan?planContent:buildContent}</div>
       </div>
       {editDay&&<EditModal day={editDay} onSave={d=>{updatePlan({...plan!,days:plan!.days.map(x=>x.day===d.day?d:x)});setEditDay(null);showToast("Day updated!");}} onClose={()=>setEditDay(null)}/>}
-      {sessionDay&&<WorkoutSession day={sessionDay} onClose={()=>setSessionDay(null)} onDone={handleWorkoutComplete}/>}
+      {sessionDay&&<WorkoutSession day={sessionDay} userId={userId} goal={goal} onClose={()=>setSessionDay(null)} onDone={handleWorkoutComplete}/>}
       <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}} @keyframes popIn{0%{transform:scale(0.6);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}`}</style>
     </div>
   );}
@@ -258,7 +555,7 @@ export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkout
       {header(plan?"Your weekly plan":"Build your week",plan?`${goal} · ${level} · tap today's workout to start`:"Powered by AI — just describe your situation")}
       <div style={{padding:"20px"}}>{loading?loadingSpinner:plan?planContent:buildContent}</div>
       {editDay&&<EditModal day={editDay} onSave={d=>{updatePlan({...plan!,days:plan!.days.map(x=>x.day===d.day?d:x)});setEditDay(null);showToast("Day updated!");}} onClose={()=>setEditDay(null)}/>}
-      {sessionDay&&<WorkoutSession day={sessionDay} onClose={()=>setSessionDay(null)} onDone={handleWorkoutComplete}/>}
+      {sessionDay&&<WorkoutSession day={sessionDay} userId={userId} goal={goal} onClose={()=>setSessionDay(null)} onDone={handleWorkoutComplete}/>}
       <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}} @keyframes popIn{0%{transform:scale(0.6);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}`}</style>
     </>
   );

@@ -12,10 +12,11 @@ type ChatMsg = { role: "user" | "assistant"; content: string };
 function pad(n: number) { return String(n).padStart(2, "0"); }
 function localDateStr(date: Date) { return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`; }
 function getWeekKey(date: Date) {
-  const jan4 = new Date(date.getFullYear(), 0, 4);
-  const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000);
-  const weekNum = Math.ceil((dayOfYear + jan4.getDay()) / 7);
-  return `${date.getFullYear()}-W${String(weekNum).padStart(2,"0")}`;
+  const day = date.getDay();
+  const daysFromMonday = day === 0 ? 6 : day - 1;
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - daysFromMonday);
+  return `${monday.getFullYear()}-${pad(monday.getMonth()+1)}-${pad(monday.getDate())}`;
 }
 
 const DAYS_OF_WEEK = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];

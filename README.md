@@ -1,5 +1,7 @@
 # FitForge AI
 
+**Live app: [fitforge-ai-blond.vercel.app](https://fitforge-ai-blond.vercel.app)**
+
 An AI-powered personal fitness app built with Next.js, Claude API, Supabase, and Google OAuth. FitForge AI generates personalized weekly workout plans, tracks nutrition with AI-assisted macro calculation, and provides a personal AI coach that knows your goals and progress.
 
 ---
@@ -22,7 +24,7 @@ An AI-powered personal fitness app built with Next.js, Claude API, Supabase, and
 |---|---|
 | Framework | Next.js 14 (App Router, TypeScript) |
 | AI | Anthropic Claude API (claude-sonnet-4-20250514) |
-| Auth | NextAuth v5 with Google OAuth |
+| Auth | Custom Google OAuth + JWT sessions |
 | Database | Supabase (PostgreSQL) |
 | Styling | Inline styles (no Tailwind) |
 | Deployment | Vercel |
@@ -33,10 +35,12 @@ An AI-powered personal fitness app built with Next.js, Claude API, Supabase, and
 
 ```
 fitforge-ai/
-├── auth.ts                          # NextAuth config
-├── proxy.ts                         # Middleware routing
+├── middleware.ts                    # Route protection (auth redirects)
 ├── lib/
+│   ├── auth.ts                      # JWT session helpers
 │   └── supabase.ts                  # Supabase client + all DB functions
+├── hooks/
+│   └── useSession.tsx               # Session context + signIn/signOut helpers
 ├── app/
 │   ├── layout.tsx                   # Root layout with SessionProvider
 │   ├── page.tsx                     # Landing page (non-logged-in visitors)
@@ -51,8 +55,12 @@ fitforge-ai/
 │   │   ├── CalendarTab.tsx          # Monthly calendar
 │   │   └── NutritionTab.tsx         # Nutrition tracker
 │   └── api/
-│       ├── auth/[...nextauth]/
-│       │   └── route.ts             # NextAuth handler
+│       ├── oauth/
+│       │   ├── start/route.ts       # Initiates Google OAuth flow
+│       │   ├── callback/google/
+│       │   │   └── route.ts         # Google OAuth callback + session cookie
+│       │   ├── session/route.ts     # Returns current session user
+│       │   └── signout/route.ts     # Clears session cookie
 │       ├── generate-plan/
 │       │   └── route.js             # AI workout plan generator
 │       ├── chat/
@@ -92,7 +100,6 @@ ANTHROPIC_API_KEY=your_anthropic_api_key
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 
-NEXTAUTH_SECRET=your_random_secret
 AUTH_SECRET=your_random_secret
 NEXTAUTH_URL=http://localhost:3000
 
@@ -169,8 +176,8 @@ grant usage on schema public to anon, authenticated;
 2. Create a new project or select an existing one
 3. Go to APIs & Services → Credentials → Create OAuth 2.0 Client ID
 4. Set Authorized redirect URIs to:
-   - `http://localhost:3000/api/auth/callback/google` (development)
-   - `https://your-vercel-url.vercel.app/api/auth/callback/google` (production)
+   - `http://localhost:3000/api/oauth/callback/google` (development)
+   - `https://your-vercel-url.vercel.app/api/oauth/callback/google` (production)
 
 ### 5. Run the development server
 
@@ -210,8 +217,7 @@ npx cap open ios
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
-| `NEXTAUTH_SECRET` | Random secret for NextAuth session encryption |
-| `AUTH_SECRET` | Same as NEXTAUTH_SECRET (required by NextAuth v5) |
+| `AUTH_SECRET` | Random secret for JWT session signing |
 | `NEXTAUTH_URL` | Your app's base URL |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |

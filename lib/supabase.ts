@@ -60,15 +60,73 @@ export async function saveWorkoutLog(
   dayName: string,
   duration: string,
   exerciseCount: number,
-  timeElapsed: number
+  timeElapsed: number,
+  setData?: Record<string, Array<{ v1: string; v2: string }>>
 ) {
   const { error } = await supabase
     .from("workout_logs")
     .upsert(
-      { user_id: userId, log_date: logDate, day_name: dayName, duration, exercise_count: exerciseCount, time_elapsed: timeElapsed },
+      { user_id: userId, log_date: logDate, day_name: dayName, duration, exercise_count: exerciseCount, time_elapsed: timeElapsed, set_data: setData ?? null },
       { onConflict: "user_id,log_date" }
     )
   if (error) console.error("saveWorkoutLog error:", error)
+}
+
+// ── Set history (most recent logged sets per exercise) ────────────────────────
+
+export async function getLastSetData(
+  userId: string,
+  exerciseNames: string[]
+): Promise<Record<string, Array<{ v1: string; v2: string }>>> {
+  if (!exerciseNames.length) return {}
+  const { data, error } = await supabase
+    .from("workout_logs")
+    .select("log_date, set_data")
+    .eq("user_id", userId)
+    .not("set_data", "is", null)
+    .order("log_date", { ascending: false })
+    .limit(20)
+  if (error || !data) return {}
+
+  // Walk logs newest-first; for each exercise find the first entry that has it
+  const result: Record<string, Array<{ v1: string; v2: string }>> = {}
+  const normalise = (s: string) => s.toLowerCase().replace(/\s*\d+\s*[xX×]\s*\d+.*$/, "").trim()
+  for (const row of data) {
+    if (!row.set_data) continue
+    for (const exName of exerciseNames) {
+      if (result[exName]) continue
+      const key = Object.keys(row.set_data).find(k => normalise(k) === normalise(exName))
+      if (key) result[exName] = row.set_data[key]
+    }
+    if (Object.keys(result).length === exerciseNames.length) break
+  }
+  return result
+}
+
+// ── Body Metrics ─────────────────────────────────────────────────────────────
+
+export type BodyMetricRow = { weekKey: string; weightLbs: number | null; bodyFatPct: number | null };
+
+export async function getBodyMetrics(userId: string): Promise<BodyMetricRow[]> {
+  const { data, error } = await supabase
+    .from("body_metrics")
+    .select("week_key, weight_lbs, body_fat_pct")
+    .eq("user_id", userId)
+    .order("week_key", { ascending: true })
+  if (error || !data) return []
+  return data.map(r => ({ weekKey: r.week_key, weightLbs: r.weight_lbs, bodyFatPct: r.body_fat_pct }))
+}
+
+export async function saveBodyMetric(
+  userId: string,
+  weekKey: string,
+  weightLbs: number | null,
+  bodyFatPct: number | null
+) {
+  const { error } = await supabase
+    .from("body_metrics")
+    .upsert({ user_id: userId, week_key: weekKey, weight_lbs: weightLbs, body_fat_pct: bodyFatPct }, { onConflict: "user_id,week_key" })
+  if (error) console.error("saveBodyMetric error:", error)
 }
 
 // ── Nutrition Logs ────────────────────────────────────────────────────────────
@@ -89,6 +147,30 @@ export async function saveNutritionLog(userId: string, logDate: string, meals: a
     .from("nutrition_logs")
     .upsert({ user_id: userId, log_date: logDate, meals }, { onConflict: "user_id,log_date" })
   if (error) console.error("saveNutritionLog error:", error)
+}
+
+// ── All workout logs (for progress charts) ───────────────────────────────────
+
+export type WorkoutLogFull = {
+  logDate: string;
+  exerciseCount: number;
+  timeElapsed: number;
+  setData: Record<string, Array<{ v1: string; v2: string }>> | null;
+};
+
+export async function getAllWorkoutLogs(userId: string): Promise<WorkoutLogFull[]> {
+  const { data, error } = await supabase
+    .from("workout_logs")
+    .select("log_date, exercise_count, time_elapsed, set_data")
+    .eq("user_id", userId)
+    .order("log_date", { ascending: true })
+  if (error || !data) return []
+  return data.map(r => ({
+    logDate: r.log_date,
+    exerciseCount: r.exercise_count ?? 0,
+    timeElapsed: r.time_elapsed ?? 0,
+    setData: r.set_data ?? null,
+  }))
 }
 
 // ── Nutrition Goals ───────────────────────────────────────────────────────────

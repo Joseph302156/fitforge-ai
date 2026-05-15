@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const redirectUri = `${baseUrl}/api/auth/callback/google`
+    const redirectUri = `${baseUrl}/api/oauth/callback/google`
 
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
