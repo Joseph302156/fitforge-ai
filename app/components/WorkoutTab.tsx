@@ -30,13 +30,9 @@ function getWeekKey() {
 }
 
 // ── Set tracking helpers ──────────────────────────────────────────
-const REST_SECS = 90;
-const RING_CIRC = 100.5; // 2π×16
-
 type MetricType = "weight_reps"|"reps_only"|"distance"|"laps"|"timed";
 type SetEntry = { v1:string; v2:string; done:boolean };
 type ExState  = { sets:SetEntry[]; metric:MetricType };
-type RestInfo = { secsLeft:number; exIdx:number; setIdx:number };
 
 function parseSetCount(ex:string):number {
   const m=ex.match(/(\d+)\s*[xX×]\s*\d+/);
@@ -104,11 +100,9 @@ function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; user
   const [secs,setSecs]=useState(0);
   const [done,setDone]=useState(false);
   const [expanded,setExpanded]=useState<number|null>(null);
-  const [rest,setRest]=useState<RestInfo|null>(null);
   const [confirmEnd,setConfirmEnd]=useState(false);
   const [newEx,setNewEx]=useState("");
   const mainT=useRef<ReturnType<typeof setInterval>|null>(null);
-  const restT=useRef<ReturnType<typeof setInterval>|null>(null);
 
   const totalSets=exStates.reduce((a,ex)=>a+ex.sets.length,0);
   const doneSets=exStates.reduce((a,ex)=>a+ex.sets.filter(s=>s.done).length,0);
@@ -134,7 +128,7 @@ function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; user
   },[userId]);
 
   useEffect(()=>{if(allDone&&started&&!done){const t=setTimeout(finish,800);return()=>clearTimeout(t);}},[allDone,started,done]);
-  useEffect(()=>()=>{if(mainT.current)clearInterval(mainT.current);if(restT.current)clearInterval(restT.current);},[]);
+  useEffect(()=>()=>{if(mainT.current)clearInterval(mainT.current);},[]);
 
   function buildSetData():Record<string,Array<{v1:string;v2:string}>>{
     const out:Record<string,Array<{v1:string;v2:string}>>={};
@@ -146,16 +140,11 @@ function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; user
   }
 
   function start(){setStarted(true);mainT.current=setInterval(()=>setSecs(s=>s+1),1000);setExpanded(0);}
-  function finish(){if(mainT.current)clearInterval(mainT.current);if(restT.current)clearInterval(restT.current);setRest(null);setDone(true);onDone(day.name,day.duration||"",exNames.length,secs,buildSetData());}
+  function finish(){if(mainT.current)clearInterval(mainT.current);setDone(true);onDone(day.name,day.duration||"",exNames.length,secs,buildSetData());}
 
   function completeSet(exIdx:number,setIdx:number){
     setExStates(prev=>{const n=prev.map(ex=>({...ex,sets:ex.sets.map(s=>({...s}))}));n[exIdx].sets[setIdx].done=true;return n;});
-    if(restT.current)clearInterval(restT.current);
-    setRest({secsLeft:REST_SECS,exIdx,setIdx});
-    restT.current=setInterval(()=>setRest(p=>{if(!p)return null;if(p.secsLeft<=1){clearInterval(restT.current!);return null;}return{...p,secsLeft:p.secsLeft-1};}),1000);
   }
-
-  function skipRest(){if(restT.current)clearInterval(restT.current);setRest(null);}
 
   function updateSet(exIdx:number,setIdx:number,field:"v1"|"v2",val:string){
     setExStates(prev=>{const n=prev.map(ex=>({...ex,sets:ex.sets.map(s=>({...s}))}));n[exIdx].sets[setIdx][field]=val;return n;});
@@ -189,13 +178,6 @@ function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; user
     setExpanded(exNames.length);
   }
 
-  function getNextLabel(exIdx:number,setIdx:number):string {
-    const ex=exStates[exIdx];
-    if(setIdx<ex.sets.length-1)return`Set ${setIdx+2} of ${ex.sets.length}`;
-    if(exIdx<exStates.length-1){const nm=exNames[exIdx+1].replace(/\s*\d+\s*[xX×]\s*\d+.*$/,"").trim();return nm.length>22?nm.slice(0,20)+"…":nm;}
-    return"Final set!";
-  }
-
   function fmt(s:number){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;return h>0?`${h}:${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`:`${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`;}
 
   return (
@@ -217,26 +199,6 @@ function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; user
           </div>
           {started&&!done&&<><div style={{background:"rgba(255,255,255,0.1)",borderRadius:"99px",height:"5px",overflow:"hidden",marginTop:"10px"}}><div style={{height:"100%",borderRadius:"99px",background:"#22c55e",width:`${(doneSets/totalSets)*100}%`,transition:"width 0.5s"}}/></div><p style={{color:"rgba(255,255,255,0.3)",fontSize:"10px",textAlign:"center",margin:"5px 0 0"}}>{doneSets} of {totalSets} sets done</p></>}
         </div>
-
-        {/* ── Rest timer banner ── */}
-        {rest&&(
-          <div style={{background:"#f0fdf4",borderBottom:"1px solid #bbf7d0",padding:"10px 16px",display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
-            <div style={{width:"38px",height:"38px",position:"relative",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <svg width="38" height="38" viewBox="0 0 38 38" style={{position:"absolute",top:0,left:0}}>
-                <circle cx="19" cy="19" r="16" fill="none" stroke="#bbf7d0" strokeWidth="3"/>
-                <circle cx="19" cy="19" r="16" fill="none" stroke="#22c55e" strokeWidth="3"
-                  strokeDasharray={RING_CIRC} strokeDashoffset={RING_CIRC*(1-rest.secsLeft/REST_SECS)}
-                  strokeLinecap="round" transform="rotate(-90 19 19)" style={{transition:"stroke-dashoffset 1s linear"}}/>
-              </svg>
-              <span style={{color:"#15803d",fontSize:"11px",fontWeight:700,fontFamily:"monospace",position:"relative",zIndex:1}}>{rest.secsLeft}</span>
-            </div>
-            <div style={{flex:1}}>
-              <p style={{color:"#15803d",fontSize:"12px",fontWeight:600,margin:0}}>Rest — Set {rest.setIdx+1} complete ✓</p>
-              <p style={{color:"#16a34a",fontSize:"10px",margin:"2px 0 0"}}>Next: {getNextLabel(rest.exIdx,rest.setIdx)}</p>
-            </div>
-            <button onClick={skipRest} style={{color:"#15803d",fontSize:"11px",fontWeight:500,background:"white",border:"1px solid #bbf7d0",borderRadius:"8px",padding:"5px 10px",cursor:"pointer"}}>Skip →</button>
-          </div>
-        )}
 
         {/* ── Exercise list ── */}
         {!done&&(
@@ -306,8 +268,8 @@ function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; user
                                 <span style={{fontSize:"10px",color:"#9ca3af"}}>{ml.v2Label}</span>
                               </>}
                             </div>
-                            <button onClick={()=>{if(started&&!s.done&&!rest)completeSet(exIdx,si);}} disabled={!started||s.done||!!rest}
-                              style={{width:"30px",height:"30px",borderRadius:"50%",border:s.done?"none":"1.5px solid #d1d5db",background:s.done?"#22c55e":"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",cursor:started&&!s.done&&!rest?"pointer":"default",flexShrink:0,opacity:rest&&!s.done?0.4:1}}>
+                            <button onClick={()=>{if(started&&!s.done)completeSet(exIdx,si);}} disabled={!started||s.done}
+                              style={{width:"30px",height:"30px",borderRadius:"50%",border:s.done?"none":"1.5px solid #d1d5db",background:s.done?"#22c55e":"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",cursor:started&&!s.done?"pointer":"default",flexShrink:0}}>
                               {s.done&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                             </button>
                           </div>
