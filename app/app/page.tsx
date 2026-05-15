@@ -73,6 +73,7 @@ export default function AppPage() {
   const [workoutLog, setWorkoutLog] = useState<Record<string, {
     dayName: string; duration: string; exerciseCount: number; timeElapsed: number;
   }>>({});
+  const [nutritionGoals, setNutritionGoals] = useState<{calories:number;protein:number;carbs:number;fat:number}|null>(null);
 
   useEffect(() => {
     try { setWorkoutLog(JSON.parse(localStorage.getItem("fitforge_log") || "{}")); }
@@ -90,9 +91,9 @@ export default function AppPage() {
   const tabContent = (
     <div style={{ flex:1, overflowY:"auto" }}>
       {activeTab === "home"      && <HomeTab onStartWorkout={() => setActiveTab("workout")} isDesktop={isDesktop} />}
-      {activeTab === "workout"   && <WorkoutTab onWorkoutComplete={logCompletedWorkout} isDesktop={isDesktop} />}
+      {activeTab === "workout"   && <WorkoutTab onWorkoutComplete={logCompletedWorkout} onNutritionGoals={setNutritionGoals} isDesktop={isDesktop} />}
       {activeTab === "calendar"  && <CalendarTab workoutLog={workoutLog} isDesktop={isDesktop} />}
-      {activeTab === "nutrition" && <NutritionTab isDesktop={isDesktop} />}
+      {activeTab === "nutrition" && <NutritionTab isDesktop={isDesktop} suggestedGoals={nutritionGoals ?? undefined} />}
       {activeTab === "progress"  && <ProgressTab isDesktop={isDesktop} />}
     </div>
   );

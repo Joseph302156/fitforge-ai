@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useSession } from "@/hooks/useSession";
-import { getWorkoutPlan, saveWorkoutPlan, deleteWorkoutPlan, saveWorkoutLog, getWorkoutLogs, getLastSetData } from "@/lib/supabase";
+import { getWorkoutPlan, saveWorkoutPlan, deleteWorkoutPlan, saveWorkoutLog, getWorkoutLogs, getLastSetData, saveNutritionGoals } from "@/lib/supabase";
 
 const DAY_COLORS: Record<string, { bg: string; text: string; badge: string; accent: string }> = {
   Monday:    { bg:"#eef2ff", text:"#4338ca", badge:"MON", accent:"#4f46e5" },
@@ -18,6 +18,20 @@ const CHAT_SUGGESTIONS = ["Make Monday easier","Add more cardio","I only have 20
 
 type Day = { day: string; type: string; name: string; duration?: string; exercises?: string[] };
 type Plan = { days: Day[]; tip?: string };
+type NutritionGoals = { calories:number; protein:number; carbs:number; fat:number };
+
+function computeNutritionGoals(goal:string, level:string, plan:Plan): NutritionGoals {
+  const li = level==="Beginner" ? 0 : level==="Intermediate" ? 1 : 2;
+  const workoutDays = plan.days.filter(d=>d.type!=="rest").length;
+  let calories:number, protein:number;
+  if (goal==="Build muscle")  { calories=[2600,2900,3200][li]; protein=[180,200,220][li]; }
+  else if (goal==="Lose weight") { calories=[1700,1900,2100][li]; protein=[140,160,175][li]; }
+  else                           { calories=[2000,2200,2400][li]; protein=[120,140,160][li]; }
+  calories += Math.max(0, workoutDays-3) * 50;
+  const fat   = Math.round(calories*0.25/9);
+  const carbs = Math.round((calories - protein*4 - fat*9)/4);
+  return { calories, protein, carbs, fat };
+}
 
 function localDateStr(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 function getWeekKey() {
@@ -404,7 +418,7 @@ function ChatBox({ plan, goal, level, currentDay, pastDays, userPrompt, onPlanUp
   );
 }
 
-export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkoutComplete:(n:string,d:string,c:number,s:number)=>void; isDesktop?: boolean }) {
+export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesktop }: { onWorkoutComplete:(n:string,d:string,c:number,s:number)=>void; onNutritionGoals?:(g:NutritionGoals)=>void; isDesktop?: boolean }) {
   const { data: session } = useSession();
   const userId = session?.user?.id||session?.user?.email||"";
   const [goal,setGoal]=useState("Lose weight");
@@ -443,7 +457,15 @@ export default function WorkoutTab({ onWorkoutComplete, isDesktop }: { onWorkout
   async function updatePlan(p:Plan){setPlan(p);await saveWorkoutPlan(userId,weekKey,p);}
   async function generate(){
     setLoading(true);setError("");setPlan(null);
-    try{const res=await fetch("/api/generate-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,userPrompt:prompt,currentDay:currentDayName,pastDays})});const data=await res.json();if(data.error)throw new Error(data.error);await updatePlan(data);}
+    try{
+      const res=await fetch("/api/generate-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,userPrompt:prompt,currentDay:currentDayName,pastDays})});
+      const data=await res.json();
+      if(data.error)throw new Error(data.error);
+      await updatePlan(data);
+      const ng=computeNutritionGoals(goal,level,data);
+      await saveNutritionGoals(userId,ng);
+      onNutritionGoals?.(ng);
+    }
     catch{setError("Something went wrong. Please try again.");}
     finally{setLoading(false);}
   }
