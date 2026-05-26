@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "@/hooks/useSession";
 import { getWorkoutLogs, getWorkoutPlan } from "@/lib/supabase";
 
-type LogEntry = { dayName: string; duration: string; exerciseCount: number; timeElapsed: number };
+type LogEntry = { dayName: string; duration: string; exerciseCount: number; timeElapsed: number; startTime?: string | null; endTime?: string | null };
 type PlanDay = { day: string; type: string; name: string; duration?: string };
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -19,6 +19,7 @@ function pad(n:number){return String(n).padStart(2,"0");}
 function toDateStr(d:Date){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
 function getDayName(d:Date){return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getDay()];}
 function fmtTime(s:number){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;return h>0?`${h}:${pad(m)}:${pad(sc)}`:`${pad(m)}:${pad(sc)}`;}
+function fmtClock(iso:string|null|undefined){if(!iso)return null;try{const d=new Date(iso);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}catch{return null;}}
 function getWeekKey(date:Date){const day=date.getDay();const daysFromMonday=day===0?6:day-1;const monday=new Date(date);monday.setDate(date.getDate()-daysFromMonday);return `${monday.getFullYear()}-${pad(monday.getMonth()+1)}-${pad(monday.getDate())}`;}
 type CT="completed"|"today-done"|"today-sched"|"today"|"upcoming"|"missed"|"empty";
 
@@ -190,6 +191,22 @@ export default function CalendarTab({ workoutLog: propLog, isDesktop }: { workou
                   </div>
                 ))}
               </div>
+              {(fmtClock(selEntry.startTime)||fmtClock(selEntry.endTime))&&(
+                <div style={{display:"flex",gap:"8px",marginTop:"8px"}}>
+                  {fmtClock(selEntry.startTime)&&(
+                    <div style={{flex:1,background:"white",border:"1px solid #f3f4f6",borderRadius:"8px",padding:"8px",textAlign:"center"}}>
+                      <div style={{fontSize:"14px",fontWeight:500,color:"#1f2937"}}>{fmtClock(selEntry.startTime)}</div>
+                      <div style={{fontSize:"11px",color:"#9ca3af",marginTop:"2px"}}>Started</div>
+                    </div>
+                  )}
+                  {fmtClock(selEntry.endTime)&&(
+                    <div style={{flex:1,background:"white",border:"1px solid #f3f4f6",borderRadius:"8px",padding:"8px",textAlign:"center"}}>
+                      <div style={{fontSize:"14px",fontWeight:500,color:"#1f2937"}}>{fmtClock(selEntry.endTime)}</div>
+                      <div style={{fontSize:"11px",color:"#9ca3af",marginTop:"2px"}}>Ended</div>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           ):(isUpcoming||isTodaySched)&&selSched?(
             <div style={{display:"flex",alignItems:"center",gap:"10px"}}>

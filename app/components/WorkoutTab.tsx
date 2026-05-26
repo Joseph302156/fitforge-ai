@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useSession } from "@/hooks/useSession";
 import { getWorkoutPlan, saveWorkoutPlan, deleteWorkoutPlan, saveWorkoutLog, getWorkoutLogs, getLastSetData, saveNutritionGoals } from "@/lib/supabase";
 
@@ -102,7 +103,7 @@ function nudgeText(metric: MetricType, sets: Array<{ v1: string; v2: string }>, 
   return "";
 }
 
-function WorkoutSession({ day, userId, goal, onClose, onMinimize, onDone, minimized }: { day: Day; userId: string; goal: string; onClose: ()=>void; onMinimize: ()=>void; onDone: (n:string,d:string,c:number,s:number,setData:Record<string,Array<{v1:string;v2:string}>>) =>void; minimized: boolean }) {
+function WorkoutSession({ day, userId, goal, onClose, onMinimize, onDone, minimized }: { day: Day; userId: string; goal: string; onClose: ()=>void; onMinimize: ()=>void; onDone: (n:string,d:string,c:number,s:number,setData:Record<string,Array<{v1:string;v2:string}>>,startTime:Date|null,endTime:Date) =>void; minimized: boolean }) {
   const c=DAY_COLORS[day.day]||{bg:"#f9fafb",text:"#6b7280",badge:"DAY",accent:"#6366f1"};
 
   const [exNames,setExNames]=useState<string[]>(day.exercises||[]);
@@ -113,6 +114,8 @@ function WorkoutSession({ day, userId, goal, onClose, onMinimize, onDone, minimi
   const [started,setStarted]=useState(false);
   const [secs,setSecs]=useState(0);
   const [done,setDone]=useState(false);
+  const [startTime,setStartTime]=useState<Date|null>(null);
+  const [endTime,setEndTime]=useState<Date|null>(null);
   const [expanded,setExpanded]=useState<number|null>(null);
   const [confirmEnd,setConfirmEnd]=useState(false);
   const [newEx,setNewEx]=useState("");
@@ -175,8 +178,9 @@ function WorkoutSession({ day, userId, goal, onClose, onMinimize, onDone, minimi
     return out;
   }
 
-  function start(){setStarted(true);startedRef.current=true;mainT.current=setInterval(()=>setSecs(s=>s+1),1000);setExpanded(0);}
-  function finish(){if(mainT.current)clearInterval(mainT.current);doneRef.current=true;setDone(true);onDone(day.name,day.duration||"",exNames.length,secs,buildSetData());}
+  function start(){const now=new Date();setStarted(true);startedRef.current=true;setStartTime(now);mainT.current=setInterval(()=>setSecs(s=>s+1),1000);setExpanded(0);}
+  function finish(){const now=new Date();if(mainT.current)clearInterval(mainT.current);doneRef.current=true;setEndTime(now);setDone(true);onDone(day.name,day.duration||"",exNames.length,secs,buildSetData(),startTime,now);}
+  function fmtClock(d:Date){return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}
 
   function completeSet(exIdx:number,setIdx:number){
     setExStates(prev=>{const n=prev.map(ex=>({...ex,sets:ex.sets.map(s=>({...s}))}));n[exIdx].sets[setIdx].done=true;return n;});
@@ -229,7 +233,7 @@ function WorkoutSession({ day, userId, goal, onClose, onMinimize, onDone, minimi
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"16px"}}>
             <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
               <div style={{width:"40px",height:"40px",borderRadius:"10px",background:c.bg,color:c.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:700,flexShrink:0}}>{c.badge}</div>
-              <div><p style={{color:"white",fontSize:"14px",fontWeight:500,margin:0}}>{day.name}</p><p style={{color:"rgba(255,255,255,0.4)",fontSize:"11px",margin:"2px 0 0"}}>{day.duration} · {exNames.length} exercises</p></div>
+              <div><p style={{color:"white",fontSize:"14px",fontWeight:500,margin:0}}>{day.name}</p><p style={{color:"rgba(255,255,255,0.4)",fontSize:"11px",margin:"2px 0 0"}}>{day.duration?`~${day.duration} est.`:""}{day.duration?" · ":""}{exNames.length} exercises</p></div>
             </div>
             {!started&&<button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",fontSize:"20px",cursor:"pointer",lineHeight:1}}>✕</button>}
           </div>
@@ -345,7 +349,19 @@ function WorkoutSession({ day, userId, goal, onClose, onMinimize, onDone, minimi
             <h3 style={{fontSize:"18px",fontWeight:600,color:"#1f2937",margin:"0 0 4px"}}>Workout complete!</h3>
             <p style={{fontSize:"12px",color:"#9ca3af",margin:"0 0 8px"}}>{doneSets} of {totalSets} sets logged</p>
             <p style={{fontFamily:"monospace",fontSize:"28px",fontWeight:700,color:"#374151",margin:"8px 0 4px"}}>{fmt(secs)}</p>
-            <p style={{fontSize:"10px",color:"#9ca3af"}}>Total time</p>
+            <p style={{fontSize:"10px",color:"#9ca3af",marginBottom:"16px"}}>Total time</p>
+            {startTime&&endTime&&(
+              <div style={{display:"flex",gap:"8px",width:"100%"}}>
+                <div style={{flex:1,background:"#f9fafb",border:"1px solid #f3f4f6",borderRadius:"10px",padding:"8px 10px",textAlign:"center"}}>
+                  <p style={{fontSize:"10px",color:"#9ca3af",margin:"0 0 3px"}}>Started</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#1f2937",margin:0}}>{fmtClock(startTime)}</p>
+                </div>
+                <div style={{flex:1,background:"#f9fafb",border:"1px solid #f3f4f6",borderRadius:"10px",padding:"8px 10px",textAlign:"center"}}>
+                  <p style={{fontSize:"10px",color:"#9ca3af",margin:"0 0 3px"}}>Ended</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#1f2937",margin:0}}>{fmtClock(endTime)}</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -405,7 +421,7 @@ function DayCard({ day, onEdit, onStart, isCompleted, isToday }: { day:Day; onEd
   const c=DAY_COLORS[day.day]||{bg:"#f9fafb",text:"#6b7280",badge:"DAY",accent:"#6366f1"};
   const [hovered,setHovered]=useState(false);
   if(day.type==="rest") return <div style={{display:"flex",alignItems:"center",gap:"12px",background:"#f9fafb",borderRadius:"12px",padding:"12px",opacity:0.5}}><div style={{width:"36px",height:"36px",borderRadius:"8px",background:c.bg,color:c.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:500,flexShrink:0}}>{c.badge}</div><p style={{fontSize:"12px",color:"#9ca3af",margin:0}}>Rest day — recovery</p></div>;
-  if(isCompleted) return <div style={{background:"#f0fdf4",borderRadius:"12px",border:"1px solid #bbf7d0"}}><div style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 12px 8px"}}><div style={{width:"36px",height:"36px",borderRadius:"8px",background:c.bg,color:c.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:500,flexShrink:0}}>{c.badge}</div><div style={{flex:1,minWidth:0}}><p style={{fontSize:"12px",fontWeight:500,color:"#15803d",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{day.name}</p><p style={{fontSize:"10px",color:"#86efac",margin:"2px 0 0"}}>{day.duration} · completed</p></div><div style={{width:"28px",height:"28px",borderRadius:"50%",background:"#22c55e",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div></div><div style={{borderLeft:"2px solid #bbf7d0",marginLeft:"16px",paddingLeft:"12px",paddingBottom:"12px",display:"flex",flexDirection:"column",gap:"4px"}}>{day.exercises?.map((ex,i)=><p key={i} style={{fontSize:"10px",color:"#86efac",margin:0}}>{ex}</p>)}</div></div>;
+  if(isCompleted) return <div style={{background:"#f0fdf4",borderRadius:"12px",border:"1px solid #bbf7d0"}}><div style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 12px 8px"}}><div style={{width:"36px",height:"36px",borderRadius:"8px",background:c.bg,color:c.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:500,flexShrink:0}}>{c.badge}</div><div style={{flex:1,minWidth:0}}><p style={{fontSize:"12px",fontWeight:500,color:"#15803d",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{day.name}</p><p style={{fontSize:"10px",color:"#86efac",margin:"2px 0 0"}}>{day.duration} · completed</p></div><div style={{display:"flex",alignItems:"center",gap:"6px",flexShrink:0}}><button onClick={e=>{e.stopPropagation();onEdit(day);}} style={{width:"28px",height:"28px",borderRadius:"8px",border:"1px solid #bbf7d0",background:"white",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#15803d"}} title="Edit workout"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button onClick={()=>onStart(day)} style={{width:"28px",height:"28px",borderRadius:"8px",border:"1px solid #bbf7d0",background:"white",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#15803d"}} title="Re-do workout"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></button></div></div><div style={{borderLeft:"2px solid #bbf7d0",marginLeft:"16px",paddingLeft:"12px",paddingBottom:"12px",display:"flex",flexDirection:"column",gap:"4px"}}>{day.exercises?.map((ex,i)=><p key={i} style={{fontSize:"10px",color:"#86efac",margin:0}}>{ex}</p>)}</div></div>;
   return <div onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} onClick={()=>{if(isToday)onStart(day);}} style={{background:"#f9fafb",borderRadius:"12px",border:hovered&&isToday?"1px solid #e5e7eb":"1px solid #f3f4f6",cursor:isToday?"pointer":"default",transition:"border-color 0.15s",opacity:isToday?1:0.75}}><div style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 12px 8px"}}><div style={{width:"36px",height:"36px",borderRadius:"8px",background:c.bg,color:c.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:500,flexShrink:0}}>{c.badge}</div><div style={{flex:1,minWidth:0}}><p style={{fontSize:"12px",fontWeight:500,color:"#1f2937",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{day.name}</p><p style={{fontSize:"10px",color:"#9ca3af",margin:"2px 0 0"}}>{day.duration} · {day.exercises?.length} exercises</p>{!isToday&&<p style={{fontSize:"10px",color:"#f59e0b",margin:"2px 0 0"}}>available on {day.day}</p>}</div><div style={{display:"flex",alignItems:"center",gap:"6px"}}><button onClick={e=>{e.stopPropagation();onEdit(day);}} style={{width:"28px",height:"28px",borderRadius:"8px",border:"1px solid #e5e7eb",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:hovered?1:0,transition:"opacity 0.15s",color:"#d1d5db"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>{isToday&&<div style={{width:"28px",height:"28px",display:"flex",alignItems:"center",justifyContent:"center",color:hovered?"#6b7280":"#d1d5db"}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>}</div></div><div style={{borderLeft:"2px solid #e5e7eb",marginLeft:"16px",paddingLeft:"12px",paddingBottom:"12px",display:"flex",flexDirection:"column",gap:"4px"}}>{day.exercises?.map((ex,i)=><p key={i} style={{fontSize:"10px",color:"#6b7280",margin:0}}>{ex}</p>)}</div></div>;
 }
 
@@ -497,9 +513,9 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
     catch{setError("Something went wrong. Please try again.");}
     finally{setLoading(false);}
   }
-  async function handleWorkoutComplete(n:string,d:string,c:number,s:number,setData:Record<string,Array<{v1:string;v2:string}>>){
+  async function handleWorkoutComplete(n:string,d:string,c:number,s:number,setData:Record<string,Array<{v1:string;v2:string}>>,startTime:Date|null,endTime:Date){
     const updated={...workoutLog,[todayStr]:{dayName:n}};setWorkoutLog(updated);
-    await saveWorkoutLog(userId,todayStr,n,d,c,s,setData);
+    await saveWorkoutLog(userId,todayStr,n,d,c,s,setData,startTime?.toISOString(),endTime.toISOString());
     onWorkoutComplete(n,d,c,s);closeSession();showToast("Workout logged!");
   }
   function closeSession(){setSessionDay(null);setSessionMinimized(false);}
@@ -551,17 +567,22 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
 
   const loadingSpinner=(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"64px 0",gap:"16px"}}><div style={{width:"32px",height:"32px",borderRadius:"50%",border:"2px solid #e5e7eb",borderTopColor:"#6366f1",animation:"spin 0.8s linear infinite"}}/><p style={{fontSize:"12px",color:"#9ca3af"}}>Building your personalized plan...</p></div>);
 
-  // Floating pill shown while a workout is minimized — renders over any tab
-  const resumePill = sessionDay&&sessionMinimized&&(
-    <div style={{position:"fixed",bottom:"76px",left:"50%",transform:"translateX(-50%)",zIndex:60,display:"flex",alignItems:"center",gap:"10px",background:"#1a1a2e",borderRadius:"20px",padding:"10px 14px 10px 12px",boxShadow:"0 4px 24px rgba(0,0,0,0.3)",animation:"slideUp 0.25s ease forwards",whiteSpace:"nowrap"}}>
-      <div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#22c55e",animation:"pulse 1.5s ease-in-out infinite",flexShrink:0}}/>
-      <div style={{minWidth:0}}>
-        <p style={{color:"white",fontSize:"12px",fontWeight:500,margin:0,overflow:"hidden",textOverflow:"ellipsis"}}>{sessionDay.name}</p>
-        <p style={{color:"rgba(255,255,255,0.45)",fontSize:"10px",margin:0}}>Workout in progress</p>
-      </div>
-      <button onClick={()=>setSessionMinimized(false)} style={{background:"#4f46e5",color:"white",border:"none",borderRadius:"10px",padding:"6px 12px",fontSize:"11px",fontWeight:500,cursor:"pointer",marginLeft:"4px",flexShrink:0}}>Resume →</button>
-    </div>
-  );
+  // Floating pill shown while a workout is minimized.
+  // Portaled to document.body so it stays visible even when WorkoutTab's
+  // parent container is hidden via display:none (e.g. user on another tab).
+  const resumePill = sessionDay&&sessionMinimized
+    ? createPortal(
+        <div style={{position:"fixed",bottom:"76px",left:"50%",transform:"translateX(-50%)",zIndex:9999,display:"flex",alignItems:"center",gap:"10px",background:"#1a1a2e",borderRadius:"20px",padding:"10px 14px 10px 12px",boxShadow:"0 4px 24px rgba(0,0,0,0.3)",whiteSpace:"nowrap"}}>
+          <div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#22c55e",animation:"pulse 1.5s ease-in-out infinite",flexShrink:0}}/>
+          <div style={{minWidth:0}}>
+            <p style={{color:"white",fontSize:"12px",fontWeight:500,margin:0,overflow:"hidden",textOverflow:"ellipsis"}}>{sessionDay.name}</p>
+            <p style={{color:"rgba(255,255,255,0.45)",fontSize:"10px",margin:0}}>Workout in progress</p>
+          </div>
+          <button onClick={()=>setSessionMinimized(false)} style={{background:"#4f46e5",color:"white",border:"none",borderRadius:"10px",padding:"6px 12px",fontSize:"11px",fontWeight:500,cursor:"pointer",marginLeft:"4px",flexShrink:0}}>Resume →</button>
+        </div>,
+        document.body
+      )
+    : null;
 
   if(isDesktop){return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>

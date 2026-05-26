@@ -39,7 +39,7 @@ export async function deleteWorkoutPlan(userId: string, weekKey: string) {
 export async function getWorkoutLogs(userId: string): Promise<Record<string, any>> {
   const { data, error } = await supabase
     .from("workout_logs")
-    .select("log_date, day_name, duration, exercise_count, time_elapsed")
+    .select("log_date, day_name, duration, exercise_count, time_elapsed, start_time, end_time")
     .eq("user_id", userId)
   if (error || !data) return {}
   const result: Record<string, any> = {}
@@ -49,6 +49,8 @@ export async function getWorkoutLogs(userId: string): Promise<Record<string, any
       duration: row.duration,
       exerciseCount: row.exercise_count,
       timeElapsed: row.time_elapsed,
+      startTime: row.start_time ?? null,
+      endTime: row.end_time ?? null,
     }
   })
   return result
@@ -61,12 +63,20 @@ export async function saveWorkoutLog(
   duration: string,
   exerciseCount: number,
   timeElapsed: number,
-  setData?: Record<string, Array<{ v1: string; v2: string }>>
+  setData?: Record<string, Array<{ v1: string; v2: string }>>,
+  startTime?: string | null,
+  endTime?: string | null
 ) {
   const { error } = await supabase
     .from("workout_logs")
     .upsert(
-      { user_id: userId, log_date: logDate, day_name: dayName, duration, exercise_count: exerciseCount, time_elapsed: timeElapsed, set_data: setData ?? null },
+      {
+        user_id: userId, log_date: logDate, day_name: dayName, duration,
+        exercise_count: exerciseCount, time_elapsed: timeElapsed,
+        set_data: setData ?? null,
+        start_time: startTime ?? null,
+        end_time: endTime ?? null,
+      },
       { onConflict: "user_id,log_date" }
     )
   if (error) console.error("saveWorkoutLog error:", error)

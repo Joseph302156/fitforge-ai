@@ -91,7 +91,11 @@ export default function AppPage() {
   const tabContent = (
     <div style={{ flex:1, overflowY:"auto" }}>
       {activeTab === "home"      && <HomeTab onStartWorkout={() => setActiveTab("workout")} isDesktop={isDesktop} />}
-      {activeTab === "workout"   && <WorkoutTab onWorkoutComplete={logCompletedWorkout} onNutritionGoals={setNutritionGoals} isDesktop={isDesktop} />}
+      {/* WorkoutTab is always mounted — display:contents/none keeps it in the React
+          tree so the timer interval and all session state survive tab switches. */}
+      <div style={{ display: activeTab === "workout" ? "contents" : "none" }}>
+        <WorkoutTab onWorkoutComplete={logCompletedWorkout} onNutritionGoals={setNutritionGoals} isDesktop={isDesktop} />
+      </div>
       {activeTab === "calendar"  && <CalendarTab workoutLog={workoutLog} isDesktop={isDesktop} />}
       {activeTab === "nutrition" && <NutritionTab isDesktop={isDesktop} suggestedGoals={nutritionGoals ?? undefined} />}
       {activeTab === "progress"  && <ProgressTab isDesktop={isDesktop} />}
@@ -260,9 +264,12 @@ export default function AppPage() {
             {/* Mobile content */}
             <div>
               {activeTab === "home"      && <HomeTab onStartWorkout={() => setActiveTab("workout")} isDesktop={false} />}
-              {activeTab === "workout"   && <WorkoutTab onWorkoutComplete={logCompletedWorkout} isDesktop={false} />}
+              {/* Always mounted — see tabContent comment above */}
+              <div style={{ display: activeTab === "workout" ? "block" : "none" }}>
+                <WorkoutTab onWorkoutComplete={logCompletedWorkout} onNutritionGoals={setNutritionGoals} isDesktop={false} />
+              </div>
               {activeTab === "calendar"  && <CalendarTab workoutLog={workoutLog} isDesktop={false} />}
-              {activeTab === "nutrition" && <NutritionTab isDesktop={false} />}
+              {activeTab === "nutrition" && <NutritionTab isDesktop={false} suggestedGoals={nutritionGoals ?? undefined} />}
               {activeTab === "progress"  && <ProgressTab isDesktop={false} />}
             </div>
 
