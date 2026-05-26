@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useSession } from "@/hooks/useSession";
 import { getWorkoutPlan, saveWorkoutPlan, deleteWorkoutPlan, saveWorkoutLog, getWorkoutLogs, getLastSetData, saveNutritionGoals } from "@/lib/supabase";
 
@@ -551,17 +552,22 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
 
   const loadingSpinner=(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"64px 0",gap:"16px"}}><div style={{width:"32px",height:"32px",borderRadius:"50%",border:"2px solid #e5e7eb",borderTopColor:"#6366f1",animation:"spin 0.8s linear infinite"}}/><p style={{fontSize:"12px",color:"#9ca3af"}}>Building your personalized plan...</p></div>);
 
-  // Floating pill shown while a workout is minimized — renders over any tab
-  const resumePill = sessionDay&&sessionMinimized&&(
-    <div style={{position:"fixed",bottom:"76px",left:"50%",transform:"translateX(-50%)",zIndex:60,display:"flex",alignItems:"center",gap:"10px",background:"#1a1a2e",borderRadius:"20px",padding:"10px 14px 10px 12px",boxShadow:"0 4px 24px rgba(0,0,0,0.3)",animation:"slideUp 0.25s ease forwards",whiteSpace:"nowrap"}}>
-      <div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#22c55e",animation:"pulse 1.5s ease-in-out infinite",flexShrink:0}}/>
-      <div style={{minWidth:0}}>
-        <p style={{color:"white",fontSize:"12px",fontWeight:500,margin:0,overflow:"hidden",textOverflow:"ellipsis"}}>{sessionDay.name}</p>
-        <p style={{color:"rgba(255,255,255,0.45)",fontSize:"10px",margin:0}}>Workout in progress</p>
-      </div>
-      <button onClick={()=>setSessionMinimized(false)} style={{background:"#4f46e5",color:"white",border:"none",borderRadius:"10px",padding:"6px 12px",fontSize:"11px",fontWeight:500,cursor:"pointer",marginLeft:"4px",flexShrink:0}}>Resume →</button>
-    </div>
-  );
+  // Floating pill shown while a workout is minimized.
+  // Portaled to document.body so it stays visible even when WorkoutTab's
+  // parent container is hidden via display:none (e.g. user on another tab).
+  const resumePill = sessionDay&&sessionMinimized
+    ? createPortal(
+        <div style={{position:"fixed",bottom:"76px",left:"50%",transform:"translateX(-50%)",zIndex:9999,display:"flex",alignItems:"center",gap:"10px",background:"#1a1a2e",borderRadius:"20px",padding:"10px 14px 10px 12px",boxShadow:"0 4px 24px rgba(0,0,0,0.3)",whiteSpace:"nowrap"}}>
+          <div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#22c55e",animation:"pulse 1.5s ease-in-out infinite",flexShrink:0}}/>
+          <div style={{minWidth:0}}>
+            <p style={{color:"white",fontSize:"12px",fontWeight:500,margin:0,overflow:"hidden",textOverflow:"ellipsis"}}>{sessionDay.name}</p>
+            <p style={{color:"rgba(255,255,255,0.45)",fontSize:"10px",margin:0}}>Workout in progress</p>
+          </div>
+          <button onClick={()=>setSessionMinimized(false)} style={{background:"#4f46e5",color:"white",border:"none",borderRadius:"10px",padding:"6px 12px",fontSize:"11px",fontWeight:500,cursor:"pointer",marginLeft:"4px",flexShrink:0}}>Resume →</button>
+        </div>,
+        document.body
+      )
+    : null;
 
   if(isDesktop){return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
