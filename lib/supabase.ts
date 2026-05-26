@@ -37,9 +37,10 @@ export async function deleteWorkoutPlan(userId: string, weekKey: string) {
 // ── Workout Logs ──────────────────────────────────────────────────────────────
 
 export async function getWorkoutLogs(userId: string): Promise<Record<string, any>> {
+  // Select only the always-safe columns first
   const { data, error } = await supabase
     .from("workout_logs")
-    .select("log_date, day_name, duration, exercise_count, time_elapsed, start_time, end_time")
+    .select("log_date, day_name, duration, exercise_count, time_elapsed")
     .eq("user_id", userId)
   if (error || !data) return {}
   const result: Record<string, any> = {}
@@ -49,10 +50,29 @@ export async function getWorkoutLogs(userId: string): Promise<Record<string, any
       duration: row.duration,
       exerciseCount: row.exercise_count,
       timeElapsed: row.time_elapsed,
-      startTime: row.start_time ?? null,
-      endTime: row.end_time ?? null,
+      startTime: null,
+      endTime: null,
     }
   })
+
+  // Try to get timestamps — requires migration:
+  //   ALTER TABLE public.workout_logs
+  //     ADD COLUMN IF NOT EXISTS start_time timestamptz,
+  //     ADD COLUMN IF NOT EXISTS end_time timestamptz;
+  // If columns don't exist yet, this query returns an error which we ignore.
+  const { data: tsData } = await supabase
+    .from("workout_logs")
+    .select("log_date, start_time, end_time")
+    .eq("user_id", userId)
+  if (tsData) {
+    tsData.forEach(row => {
+      if (result[row.log_date]) {
+        result[row.log_date].startTime = row.start_time ?? null
+        result[row.log_date].endTime = row.end_time ?? null
+      }
+    })
+  }
+
   return result
 }
 
