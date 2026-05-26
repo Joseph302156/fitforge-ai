@@ -102,7 +102,7 @@ function nudgeText(metric: MetricType, sets: Array<{ v1: string; v2: string }>, 
   return "";
 }
 
-function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; userId: string; goal: string; onClose: ()=>void; onDone: (n:string,d:string,c:number,s:number,setData:Record<string,Array<{v1:string;v2:string}>>) =>void }) {
+function WorkoutSession({ day, userId, goal, onClose, onMinimize, onDone, minimized }: { day: Day; userId: string; goal: string; onClose: ()=>void; onMinimize: ()=>void; onDone: (n:string,d:string,c:number,s:number,setData:Record<string,Array<{v1:string;v2:string}>>) =>void; minimized: boolean }) {
   const c=DAY_COLORS[day.day]||{bg:"#f9fafb",text:"#6b7280",badge:"DAY",accent:"#6366f1"};
 
   const [exNames,setExNames]=useState<string[]>(day.exercises||[]);
@@ -117,6 +117,10 @@ function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; user
   const [confirmEnd,setConfirmEnd]=useState(false);
   const [newEx,setNewEx]=useState("");
   const mainT=useRef<ReturnType<typeof setInterval>|null>(null);
+  // Refs so visibilitychange handler always sees latest values without stale closure
+  const startedRef=useRef(false);
+  const doneRef=useRef(false);
+  const hiddenAtRef=useRef<number|null>(null);
 
   const totalSets=exStates.reduce((a,ex)=>a+ex.sets.length,0);
   const doneSets=exStates.reduce((a,ex)=>a+ex.sets.filter(s=>s.done).length,0);
@@ -142,7 +146,25 @@ function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; user
   },[userId]);
 
   useEffect(()=>{if(allDone&&started&&!done){const t=setTimeout(finish,800);return()=>clearTimeout(t);}},[allDone,started,done]);
-  useEffect(()=>()=>{if(mainT.current)clearInterval(mainT.current);},[]);
+
+  // Keep timer accurate when user backgrounds the app or switches tabs.
+  // Browsers throttle setInterval in hidden tabs, so we record the hide time and
+  // add the real wall-clock gap when the tab becomes visible again.
+  useEffect(()=>{
+    function onVis(){
+      if(document.hidden){
+        hiddenAtRef.current=Date.now();
+      } else if(hiddenAtRef.current!==null){
+        if(startedRef.current&&!doneRef.current){
+          const extra=Math.floor((Date.now()-hiddenAtRef.current)/1000);
+          setSecs(s=>s+extra);
+        }
+        hiddenAtRef.current=null;
+      }
+    }
+    document.addEventListener('visibilitychange',onVis);
+    return()=>{document.removeEventListener('visibilitychange',onVis);if(mainT.current)clearInterval(mainT.current);};
+  },[]);
 
   function buildSetData():Record<string,Array<{v1:string;v2:string}>>{
     const out:Record<string,Array<{v1:string;v2:string}>>={};
@@ -153,8 +175,8 @@ function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; user
     return out;
   }
 
-  function start(){setStarted(true);mainT.current=setInterval(()=>setSecs(s=>s+1),1000);setExpanded(0);}
-  function finish(){if(mainT.current)clearInterval(mainT.current);setDone(true);onDone(day.name,day.duration||"",exNames.length,secs,buildSetData());}
+  function start(){setStarted(true);startedRef.current=true;mainT.current=setInterval(()=>setSecs(s=>s+1),1000);setExpanded(0);}
+  function finish(){if(mainT.current)clearInterval(mainT.current);doneRef.current=true;setDone(true);onDone(day.name,day.duration||"",exNames.length,secs,buildSetData());}
 
   function completeSet(exIdx:number,setIdx:number){
     setExStates(prev=>{const n=prev.map(ex=>({...ex,sets:ex.sets.map(s=>({...s}))}));n[exIdx].sets[setIdx].done=true;return n;});
@@ -193,6 +215,10 @@ function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; user
   }
 
   function fmt(s:number){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;return h>0?`${h}:${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`:`${String(m).padStart(2,"0")}:${String(sc).padStart(2,"0")}`;}
+
+  // When minimized: keep this component mounted (preserves timer + set state)
+  // but render nothing — the parent shows a floating resume pill instead.
+  if(minimized) return null;
 
   return (
     <div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"16px",background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)"}}>
@@ -339,7 +365,8 @@ function WorkoutSession({ day, userId, goal, onClose, onDone }: { day: Day; user
             </div>
           )}
           {done&&<button onClick={onClose} style={{width:"100%",background:c.accent,color:"white",border:"none",borderRadius:"16px",padding:"14px",fontSize:"14px",fontWeight:500,cursor:"pointer"}}>Done</button>}
-          {!done&&<button onClick={onClose} style={{width:"100%",background:"transparent",color:"#9ca3af",border:"1px solid #e5e7eb",borderRadius:"16px",padding:"10px",fontSize:"12px",cursor:"pointer"}}>{started?"Minimize":"Cancel"}</button>}
+          {!done&&!started&&<button onClick={onClose} style={{width:"100%",background:"transparent",color:"#9ca3af",border:"1px solid #e5e7eb",borderRadius:"16px",padding:"10px",fontSize:"12px",cursor:"pointer"}}>Cancel</button>}
+          {!done&&started&&<button onClick={onMinimize} style={{width:"100%",background:"transparent",color:"#9ca3af",border:"1px solid #e5e7eb",borderRadius:"16px",padding:"10px",fontSize:"12px",cursor:"pointer"}}>Minimize</button>}
         </div>
       </div>
     </div>
@@ -431,6 +458,7 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
   const [error,setError]=useState("");
   const [editDay,setEditDay]=useState<Day|null>(null);
   const [sessionDay,setSessionDay]=useState<Day|null>(null);
+  const [sessionMinimized,setSessionMinimized]=useState(false);
   const [toast,setToast]=useState("");
 
   const today=new Date();
@@ -472,8 +500,9 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
   async function handleWorkoutComplete(n:string,d:string,c:number,s:number,setData:Record<string,Array<{v1:string;v2:string}>>){
     const updated={...workoutLog,[todayStr]:{dayName:n}};setWorkoutLog(updated);
     await saveWorkoutLog(userId,todayStr,n,d,c,s,setData);
-    onWorkoutComplete(n,d,c,s);setSessionDay(null);showToast("Workout logged!");
+    onWorkoutComplete(n,d,c,s);closeSession();showToast("Workout logged!");
   }
+  function closeSession(){setSessionDay(null);setSessionMinimized(false);}
   async function startOver(){await deleteWorkoutPlan(userId,weekKey);setPlan(null);setError("");setPrompt("");}
 
   if(!mounted)return<><div style={{background:"#1a1a2e",padding:"20px"}}><h1 style={{color:"white",fontSize:"18px",fontWeight:500,margin:0}}>Build your week</h1><p style={{color:"rgba(255,255,255,0.4)",fontSize:"12px",margin:"4px 0 0"}}>Loading...</p></div><div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"64px 0"}}><div style={{width:"24px",height:"24px",borderRadius:"50%",border:"2px solid #e5e7eb",borderTopColor:"#6366f1",animation:"spin 0.8s linear infinite"}}/></div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></>;
@@ -522,6 +551,18 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
 
   const loadingSpinner=(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"64px 0",gap:"16px"}}><div style={{width:"32px",height:"32px",borderRadius:"50%",border:"2px solid #e5e7eb",borderTopColor:"#6366f1",animation:"spin 0.8s linear infinite"}}/><p style={{fontSize:"12px",color:"#9ca3af"}}>Building your personalized plan...</p></div>);
 
+  // Floating pill shown while a workout is minimized — renders over any tab
+  const resumePill = sessionDay&&sessionMinimized&&(
+    <div style={{position:"fixed",bottom:"76px",left:"50%",transform:"translateX(-50%)",zIndex:60,display:"flex",alignItems:"center",gap:"10px",background:"#1a1a2e",borderRadius:"20px",padding:"10px 14px 10px 12px",boxShadow:"0 4px 24px rgba(0,0,0,0.3)",animation:"slideUp 0.25s ease forwards",whiteSpace:"nowrap"}}>
+      <div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#22c55e",animation:"pulse 1.5s ease-in-out infinite",flexShrink:0}}/>
+      <div style={{minWidth:0}}>
+        <p style={{color:"white",fontSize:"12px",fontWeight:500,margin:0,overflow:"hidden",textOverflow:"ellipsis"}}>{sessionDay.name}</p>
+        <p style={{color:"rgba(255,255,255,0.45)",fontSize:"10px",margin:0}}>Workout in progress</p>
+      </div>
+      <button onClick={()=>setSessionMinimized(false)} style={{background:"#4f46e5",color:"white",border:"none",borderRadius:"10px",padding:"6px 12px",fontSize:"11px",fontWeight:500,cursor:"pointer",marginLeft:"4px",flexShrink:0}}>Resume →</button>
+    </div>
+  );
+
   if(isDesktop){return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
       {header(plan?"Your weekly plan":"Build your week",plan?`${goal} · ${level} · tap today's workout to start`:"Powered by AI — just describe your situation")}
@@ -529,8 +570,9 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
         <div style={{maxWidth:"1000px",margin:"0 auto"}}>{loading?loadingSpinner:plan?planContent:buildContent}</div>
       </div>
       {editDay&&<EditModal day={editDay} onSave={d=>{updatePlan({...plan!,days:plan!.days.map(x=>x.day===d.day?d:x)});setEditDay(null);showToast("Day updated!");}} onClose={()=>setEditDay(null)}/>}
-      {sessionDay&&<WorkoutSession day={sessionDay} userId={userId} goal={goal} onClose={()=>setSessionDay(null)} onDone={handleWorkoutComplete}/>}
-      <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}} @keyframes popIn{0%{transform:scale(0.6);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}`}</style>
+      {sessionDay&&<WorkoutSession day={sessionDay} userId={userId} goal={goal} minimized={sessionMinimized} onClose={closeSession} onMinimize={()=>setSessionMinimized(true)} onDone={handleWorkoutComplete}/>}
+      {resumePill}
+      <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}} @keyframes popIn{0%{transform:scale(0.6);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
     </div>
   );}
 
@@ -539,8 +581,9 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
       {header(plan?"Your weekly plan":"Build your week",plan?`${goal} · ${level} · tap today's workout to start`:"Powered by AI — just describe your situation")}
       <div style={{padding:"20px"}}>{loading?loadingSpinner:plan?planContent:buildContent}</div>
       {editDay&&<EditModal day={editDay} onSave={d=>{updatePlan({...plan!,days:plan!.days.map(x=>x.day===d.day?d:x)});setEditDay(null);showToast("Day updated!");}} onClose={()=>setEditDay(null)}/>}
-      {sessionDay&&<WorkoutSession day={sessionDay} userId={userId} goal={goal} onClose={()=>setSessionDay(null)} onDone={handleWorkoutComplete}/>}
-      <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}} @keyframes popIn{0%{transform:scale(0.6);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}`}</style>
+      {sessionDay&&<WorkoutSession day={sessionDay} userId={userId} goal={goal} minimized={sessionMinimized} onClose={closeSession} onMinimize={()=>setSessionMinimized(true)} onDone={handleWorkoutComplete}/>}
+      {resumePill}
+      <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}} @keyframes popIn{0%{transform:scale(0.6);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
     </>
   );
 }
