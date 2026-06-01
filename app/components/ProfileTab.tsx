@@ -23,6 +23,8 @@ export default function ProfileTab({ profile, onUpdate, isDesktop }: {
 
   async function handleSave() {
     setSaving(true);
+    // Keep localStorage in sync so profile survives Supabase downtime
+    try { localStorage.setItem(`fitforge_profile_${userId}`, JSON.stringify(draft)); } catch { /* ignore */ }
     await saveUserProfile(userId, draft);
     onUpdate(draft);
     setSaving(false);
