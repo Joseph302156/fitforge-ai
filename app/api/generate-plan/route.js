@@ -2,20 +2,33 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+function profileContext(p) {
+  if (!p) return "";
+  const bf = p.bodyFatPct ? ` / ~${p.bodyFatPct}% body fat` : "";
+  return `
+User profile (personalise the plan accordingly):
+- Gender: ${p.gender}, ${p.heightFt}'${p.heightIn}" tall, ${p.weightLbs} lbs, Build: ${p.build}${bf}
+- Primary fitness goal: ${p.fitnessGoal}
+- Target physique: ${p.targetPhysique}
+- Additional context from user: ${p.aiNotes || "None provided"}`.trim();
+}
+
 export async function POST(request) {
   try {
-    const { goal, level, userPrompt, currentDay, pastDays } = await request.json();
+    const { goal, level, userPrompt, currentDay, pastDays, userProfile } = await request.json();
 
     const pastDaysNote = pastDays && pastDays.length > 0
       ? `CRITICAL: The user is building this plan on ${currentDay}. The days ${pastDays.join(", ")} have already passed this week. You MUST set these days to type "rest" — do not schedule any workout on them under any circumstances.`
       : `The user is starting their plan on ${currentDay || "Monday"}.`;
+
+    const profileNote = profileContext(userProfile);
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1024,
       system: `You are an expert personal trainer. Generate a personalized 7-day workout plan.
 
-${pastDaysNote}
+${profileNote ? profileNote + "\n\n" : ""}${pastDaysNote}
 
 Respond with ONLY valid JSON, no markdown, no extra text:
 {
@@ -37,7 +50,7 @@ Rules:
 Fitness level: ${level}
 Today is: ${currentDay}
 Days already passed this week (must be rest): ${pastDays && pastDays.length > 0 ? pastDays.join(", ") : "none"}
-My situation: ${userPrompt || "No additional restrictions."}
+My situation: ${userPrompt || "No additional restrictions."}${profileNote ? "\n\n" + profileNote : ""}
 
 Generate my plan. Remember: ${pastDays && pastDays.length > 0 ? pastDays.join(", ") : "no days"} must be rest days.`,
       }],

@@ -203,6 +203,59 @@ export async function getAllWorkoutLogs(userId: string): Promise<WorkoutLogFull[
   }))
 }
 
+// ── User Profiles ─────────────────────────────────────────────────────────────
+
+export type UserProfile = {
+  gender: string;
+  heightFt: number;
+  heightIn: number;
+  weightLbs: number;
+  bodyFatPct: number | null;
+  build: string;
+  fitnessGoal: string;
+  targetPhysique: string;
+  aiNotes: string;
+};
+
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("gender, height_ft, height_in, weight_lbs, body_fat_pct, build, fitness_goal, target_physique, ai_notes")
+    .eq("user_id", userId)
+    .single()
+  if (error || !data) return null
+  return {
+    gender: data.gender ?? "",
+    heightFt: data.height_ft ?? 5,
+    heightIn: data.height_in ?? 8,
+    weightLbs: data.weight_lbs ?? 150,
+    bodyFatPct: data.body_fat_pct ?? null,
+    build: data.build ?? "",
+    fitnessGoal: data.fitness_goal ?? "",
+    targetPhysique: data.target_physique ?? "",
+    aiNotes: data.ai_notes ?? "",
+  }
+}
+
+export async function saveUserProfile(userId: string, profile: UserProfile): Promise<void> {
+  const { error } = await supabase
+    .from("user_profiles")
+    .upsert({
+      user_id: userId,
+      gender: profile.gender,
+      height_ft: profile.heightFt,
+      height_in: profile.heightIn,
+      weight_lbs: profile.weightLbs,
+      body_fat_pct: profile.bodyFatPct,
+      build: profile.build,
+      fitness_goal: profile.fitnessGoal,
+      target_physique: profile.targetPhysique,
+      ai_notes: profile.aiNotes,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" })
+  if (error) console.error("saveUserProfile error:", error)
+}
+
 // ── Nutrition Goals ───────────────────────────────────────────────────────────
 
 export async function getNutritionGoals(userId: string) {

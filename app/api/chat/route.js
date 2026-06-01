@@ -2,14 +2,26 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+function profileContext(p) {
+  if (!p) return "";
+  const bf = p.bodyFatPct ? ` / ~${p.bodyFatPct}% body fat` : "";
+  return `User profile:
+- Gender: ${p.gender}, ${p.heightFt}'${p.heightIn}" tall, ${p.weightLbs} lbs, Build: ${p.build}${bf}
+- Primary goal: ${p.fitnessGoal}
+- Target physique: ${p.targetPhysique}
+- Notes: ${p.aiNotes || "None"}`;
+}
+
 export async function POST(request) {
   try {
-    const { goal, level, planSummary, currentDay, pastDays, userPrompt, messages } = await request.json();
+    const { goal, level, planSummary, currentDay, pastDays, userPrompt, userProfile, messages } = await request.json();
 
     const daysOfWeek = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
     const currentDayIndex = daysOfWeek.indexOf(currentDay);
     const futureDays = currentDayIndex >= 0 ? daysOfWeek.slice(currentDayIndex) : daysOfWeek;
     const lockedDays = pastDays && pastDays.length > 0 ? pastDays : [];
+
+    const profileNote = profileContext(userProfile);
 
     const system = `You are a friendly, expert personal trainer AI assistant. The user has an existing 7-day workout plan and is chatting with you to refine or ask questions about it.
 
@@ -18,7 +30,7 @@ Current plan context:
 - Fitness level: ${level}
 - Today is: ${currentDay || "Monday"}
 - User's original restrictions: ${userPrompt || "none"}
-- Current plan:
+${profileNote ? "- " + profileNote.replace(/\n/g, "\n- ") + "\n" : ""}- Current plan:
 ${planSummary}
 
 CRITICAL SCHEDULING RULES — follow these without exception:
