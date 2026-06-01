@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "@/hooks/useSession";
-import { getWorkoutPlan, saveWorkoutPlan, deleteWorkoutPlan, saveWorkoutLog, getWorkoutLogs, getLastSetData, saveNutritionGoals } from "@/lib/supabase";
+import { getWorkoutPlan, saveWorkoutPlan, deleteWorkoutPlan, saveWorkoutLog, getWorkoutLogs, getLastSetData, saveNutritionGoals, UserProfile } from "@/lib/supabase";
 
 const DAY_COLORS: Record<string, { bg: string; text: string; badge: string; accent: string }> = {
   Monday:    { bg:"#eef2ff", text:"#4338ca", badge:"MON", accent:"#4f46e5" },
@@ -426,7 +426,7 @@ function DayCard({ day, onEdit, onStart, isCompleted, isToday, completedDuration
   return <div onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} onClick={()=>{if(isToday)onStart(day);}} style={{background:"#f9fafb",borderRadius:"12px",border:hovered&&isToday?"1px solid #e5e7eb":"1px solid #f3f4f6",cursor:isToday?"pointer":"default",transition:"border-color 0.15s",opacity:isToday?1:0.75}}><div style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 12px 8px"}}><div style={{width:"36px",height:"36px",borderRadius:"8px",background:c.bg,color:c.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:500,flexShrink:0}}>{c.badge}</div><div style={{flex:1,minWidth:0}}><p style={{fontSize:"12px",fontWeight:500,color:"#1f2937",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{day.name}</p><p style={{fontSize:"10px",color:"#9ca3af",margin:"2px 0 0"}}>{day.duration} · {day.exercises?.length} exercises</p>{!isToday&&<p style={{fontSize:"10px",color:"#f59e0b",margin:"2px 0 0"}}>available on {day.day}</p>}</div><div style={{display:"flex",alignItems:"center",gap:"6px"}}><button onClick={e=>{e.stopPropagation();onEdit(day);}} style={{width:"28px",height:"28px",borderRadius:"8px",border:"1px solid #e5e7eb",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:hovered?1:0,transition:"opacity 0.15s",color:"#d1d5db"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>{isToday&&<div style={{width:"28px",height:"28px",display:"flex",alignItems:"center",justifyContent:"center",color:hovered?"#6b7280":"#d1d5db"}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>}</div></div><div style={{borderLeft:"2px solid #e5e7eb",marginLeft:"16px",paddingLeft:"12px",paddingBottom:"12px",display:"flex",flexDirection:"column",gap:"4px"}}>{day.exercises?.map((ex,i)=><p key={i} style={{fontSize:"10px",color:"#6b7280",margin:0}}>{ex}</p>)}</div></div>;
 }
 
-function ChatBox({ plan, goal, level, currentDay, pastDays, userPrompt, onPlanUpdate }: { plan:Plan; goal:string; level:string; currentDay:string; pastDays:string[]; userPrompt:string; onPlanUpdate:(p:Plan)=>void }) {
+function ChatBox({ plan, goal, level, currentDay, pastDays, userPrompt, userProfile, onPlanUpdate }: { plan:Plan; goal:string; level:string; currentDay:string; pastDays:string[]; userPrompt:string; userProfile?:UserProfile; onPlanUpdate:(p:Plan)=>void }) {
   const [msgs,setMsgs]=useState([{role:"assistant",text:"Hey! I'm your AI trainer. Ask me anything about your plan.",updated:false}]);
   const [input,setInput]=useState("");const [loading,setLoading]=useState(false);const [open,setOpen]=useState(false);
   const bottomRef=useRef<HTMLDivElement>(null);
@@ -436,7 +436,7 @@ function ChatBox({ plan, goal, level, currentDay, pastDays, userPrompt, onPlanUp
     setInput("");setLoading(true);
     const next=[...msgs,{role:"user",text:t,updated:false}];setMsgs(next);
     const summary=plan.days.map(d=>d.type==="rest"?`${d.day}: Rest`:`${d.day}: ${d.name} (${d.duration}) — ${d.exercises?.join(", ")}`).join("\n");
-    try{const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,planSummary:summary,currentDay,pastDays,userPrompt,messages:next.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.text}))})});const data=await res.json();if(data.updatedPlan){onPlanUpdate(data.updatedPlan);setMsgs(p=>[...p,{role:"assistant",text:data.message||"Plan updated!",updated:true}]);}else setMsgs(p=>[...p,{role:"assistant",text:data.message||"Let me know if you need changes!",updated:false}]);}
+    try{const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,planSummary:summary,currentDay,pastDays,userPrompt,userProfile:userProfile??null,messages:next.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.text}))})});const data=await res.json();if(data.updatedPlan){onPlanUpdate(data.updatedPlan);setMsgs(p=>[...p,{role:"assistant",text:data.message||"Plan updated!",updated:true}]);}else setMsgs(p=>[...p,{role:"assistant",text:data.message||"Let me know if you need changes!",updated:false}]);}
     catch{setMsgs(p=>[...p,{role:"assistant",text:"Sorry, something went wrong.",updated:false}]);}
     finally{setLoading(false);}
   }
@@ -462,7 +462,7 @@ function ChatBox({ plan, goal, level, currentDay, pastDays, userPrompt, onPlanUp
   );
 }
 
-export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesktop }: { onWorkoutComplete:(n:string,d:string,c:number,s:number)=>void; onNutritionGoals?:(g:NutritionGoals)=>void; isDesktop?: boolean }) {
+export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesktop, userProfile }: { onWorkoutComplete:(n:string,d:string,c:number,s:number)=>void; onNutritionGoals?:(g:NutritionGoals)=>void; isDesktop?: boolean; userProfile?: UserProfile }) {
   const { data: session } = useSession();
   const userId = session?.user?.id||session?.user?.email||"";
   const [goal,setGoal]=useState("Lose weight");
@@ -503,7 +503,7 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
   async function generate(){
     setLoading(true);setError("");setPlan(null);
     try{
-      const res=await fetch("/api/generate-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,userPrompt:prompt,currentDay:currentDayName,pastDays})});
+      const res=await fetch("/api/generate-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,userPrompt:prompt,currentDay:currentDayName,pastDays,userProfile:userProfile??null})});
       const data=await res.json();
       if(data.error)throw new Error(data.error);
       await updatePlan(data);
@@ -555,7 +555,7 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
           return <DayCard key={day.day} day={day} onEdit={d=>setEditDay(d)} onStart={d=>setSessionDay(d)} isCompleted={isComp} isToday={isToday} completedDuration={elapsed?fmtSecs(elapsed):undefined}/>;
         })}
       </div>
-      <ChatBox plan={plan!} goal={goal} level={level} currentDay={currentDayName} pastDays={pastDays} userPrompt={prompt} onPlanUpdate={p=>{updatePlan(p);showToast("Plan updated!");}}/>
+      <ChatBox plan={plan!} goal={goal} level={level} currentDay={currentDayName} pastDays={pastDays} userPrompt={prompt} userProfile={userProfile} onPlanUpdate={p=>{updatePlan(p);showToast("Plan updated!");}}/>
       <button onClick={startOver} style={{width:"100%",marginTop:"12px",background:"transparent",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"10px",fontSize:"12px",color:"#9ca3af",cursor:"pointer"}}>← Start over</button>
     </>
   );

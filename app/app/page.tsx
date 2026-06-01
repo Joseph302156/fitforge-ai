@@ -2,12 +2,15 @@
 import { useState, useEffect } from "react";
 import { useSession, signOut } from "@/hooks/useSession";
 import dynamic from "next/dynamic";
+import { getUserProfile, saveUserProfile, UserProfile } from "@/lib/supabase";
+import OnboardingModal from "../components/OnboardingModal";
 
 const HomeTab      = dynamic(() => import("../components/HomeTab"),      { ssr: false });
 const WorkoutTab   = dynamic(() => import("../components/WorkoutTab"),   { ssr: false });
 const CalendarTab  = dynamic(() => import("../components/CalendarTab"),  { ssr: false });
 const NutritionTab = dynamic(() => import("../components/NutritionTab"), { ssr: false });
 const ProgressTab  = dynamic(() => import("../components/ProgressTab"),  { ssr: false });
+const ProfileTab   = dynamic(() => import("../components/ProfileTab"),   { ssr: false });
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false);
@@ -58,15 +61,16 @@ function FitForgeLogo({ size = 36 }: { size?: number }) {
 }
 
 const TABS = [
-  { id:"home", label:"Home", icon:(a:boolean)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-  { id:"workout", label:"Workout", icon:(a:boolean)=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="4" height="12" rx="1"/><rect x="18" y="6" width="4" height="12" rx="1"/><line x1="6" y1="12" x2="18" y2="12" strokeWidth="3"/><line x1="6" y1="8" x2="6" y2="16" strokeWidth="1.5"/><line x1="18" y1="8" x2="18" y2="16" strokeWidth="1.5"/></svg> },
-  { id:"calendar", label:"Calendar", icon:(a:boolean)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
+  { id:"home",      label:"Home",      icon:(a:boolean)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
+  { id:"workout",   label:"Workout",   icon:(a:boolean)=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="4" height="12" rx="1"/><rect x="18" y="6" width="4" height="12" rx="1"/><line x1="6" y1="12" x2="18" y2="12" strokeWidth="3"/><line x1="6" y1="8" x2="6" y2="16" strokeWidth="1.5"/><line x1="18" y1="8" x2="18" y2="16" strokeWidth="1.5"/></svg> },
+  { id:"calendar",  label:"Calendar",  icon:(a:boolean)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
   { id:"nutrition", label:"Nutrition", icon:(a:boolean)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg> },
-  { id:"progress", label:"Progress", icon:(a:boolean)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
+  { id:"progress",  label:"Progress",  icon:(a:boolean)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
+  { id:"profile",   label:"Profile",   icon:(a:boolean)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={a?"#4f46e5":"#9ca3af"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
 ];
 
 export default function AppPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const isDesktop = useIsDesktop();
   const [activeTab, setActiveTab] = useState("home");
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -74,6 +78,25 @@ export default function AppPage() {
     dayName: string; duration: string; exerciseCount: number; timeElapsed: number;
   }>>({});
   const [nutritionGoals, setNutritionGoals] = useState<{calories:number;protein:number;carbs:number;fat:number}|null>(null);
+
+  // ── User profile ──────────────────────────────────────────────────────────
+  const [userProfile,    setUserProfile]    = useState<UserProfile | null>(null);
+  const [profileLoaded,  setProfileLoaded]  = useState(false);
+
+  useEffect(() => {
+    if (status !== "authenticated" || !session?.user) return;
+    const uid = session.user.id || session.user.email || "";
+    getUserProfile(uid).then(p => {
+      setUserProfile(p);
+      setProfileLoaded(true);
+    });
+  }, [status, session?.user?.id]);
+
+  async function handleOnboardingComplete(p: UserProfile) {
+    const uid = session?.user?.id || session?.user?.email || "";
+    await saveUserProfile(uid, p);
+    setUserProfile(p);
+  }
 
   useEffect(() => {
     try { setWorkoutLog(JSON.parse(localStorage.getItem("fitforge_log") || "{}")); }
@@ -88,17 +111,23 @@ export default function AppPage() {
     localStorage.setItem("fitforge_log", JSON.stringify(updated));
   }
 
+  // Show onboarding for authenticated users who haven't set up a profile yet
+  const showOnboarding = status === "authenticated" && profileLoaded && !userProfile;
+
   const tabContent = (
     <div style={{ flex:1, overflowY:"auto" }}>
       {activeTab === "home"      && <HomeTab onStartWorkout={() => setActiveTab("workout")} isDesktop={isDesktop} />}
       {/* WorkoutTab is always mounted — display:contents/none keeps it in the React
           tree so the timer interval and all session state survive tab switches. */}
       <div style={{ display: activeTab === "workout" ? "contents" : "none" }}>
-        <WorkoutTab onWorkoutComplete={logCompletedWorkout} onNutritionGoals={setNutritionGoals} isDesktop={isDesktop} />
+        <WorkoutTab onWorkoutComplete={logCompletedWorkout} onNutritionGoals={setNutritionGoals} isDesktop={isDesktop} userProfile={userProfile ?? undefined} />
       </div>
       {activeTab === "calendar"  && <CalendarTab workoutLog={workoutLog} isDesktop={isDesktop} />}
       {activeTab === "nutrition" && <NutritionTab isDesktop={isDesktop} suggestedGoals={nutritionGoals ?? undefined} />}
       {activeTab === "progress"  && <ProgressTab isDesktop={isDesktop} />}
+      {activeTab === "profile"   && userProfile && (
+        <ProfileTab profile={userProfile} onUpdate={p => setUserProfile(p)} isDesktop={isDesktop} />
+      )}
     </div>
   );
 
@@ -194,6 +223,7 @@ export default function AppPage() {
 
         </div>
         {showUserMenu && <div style={{ position:"fixed", inset:0, zIndex:99 }} onClick={() => setShowUserMenu(false)} />}
+        {showOnboarding && <OnboardingModal onComplete={handleOnboardingComplete} />}
       </>
     );
   }
@@ -266,17 +296,21 @@ export default function AppPage() {
               {activeTab === "home"      && <HomeTab onStartWorkout={() => setActiveTab("workout")} isDesktop={false} />}
               {/* Always mounted — see tabContent comment above */}
               <div style={{ display: activeTab === "workout" ? "block" : "none" }}>
-                <WorkoutTab onWorkoutComplete={logCompletedWorkout} onNutritionGoals={setNutritionGoals} isDesktop={false} />
+                <WorkoutTab onWorkoutComplete={logCompletedWorkout} onNutritionGoals={setNutritionGoals} isDesktop={false} userProfile={userProfile ?? undefined} />
               </div>
               {activeTab === "calendar"  && <CalendarTab workoutLog={workoutLog} isDesktop={false} />}
               {activeTab === "nutrition" && <NutritionTab isDesktop={false} suggestedGoals={nutritionGoals ?? undefined} />}
               {activeTab === "progress"  && <ProgressTab isDesktop={false} />}
+              {activeTab === "profile"   && userProfile && (
+                <ProfileTab profile={userProfile} onUpdate={p => setUserProfile(p)} isDesktop={false} />
+              )}
             </div>
 
           </div>
         </div>
       </main>
       {showUserMenu && <div style={{ position:"fixed", inset:0, zIndex:99 }} onClick={() => setShowUserMenu(false)} />}
+      {showOnboarding && <OnboardingModal onComplete={handleOnboardingComplete} />}
     </>
   );
 }
