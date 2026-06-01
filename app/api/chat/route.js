@@ -14,7 +14,7 @@ function profileContext(p) {
 
 export async function POST(request) {
   try {
-    const { goal, level, planSummary, currentDay, pastDays, userPrompt, userProfile, messages } = await request.json();
+    const { goal, level, planSummary, currentDay, pastDays, userPrompt, userProfile, workoutHistory, messages } = await request.json();
 
     const daysOfWeek = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
     const currentDayIndex = daysOfWeek.indexOf(currentDay);
@@ -22,6 +22,9 @@ export async function POST(request) {
     const lockedDays = pastDays && pastDays.length > 0 ? pastDays : [];
 
     const profileNote = profileContext(userProfile);
+    const historyNote = workoutHistory && workoutHistory.length > 0
+      ? `- Recent exercises (user's favourites): ${workoutHistory.join(", ")}`
+      : "";
 
     const system = `You are a friendly, expert personal trainer AI assistant. The user has an existing 7-day workout plan and is chatting with you to refine or ask questions about it.
 
@@ -29,8 +32,7 @@ Current plan context:
 - Goal: ${goal}
 - Fitness level: ${level}
 - Today is: ${currentDay || "Monday"}
-- User's original restrictions: ${userPrompt || "none"}
-${profileNote ? "- " + profileNote.replace(/\n/g, "\n- ") + "\n" : ""}- Current plan:
+${profileNote ? profileNote.split("\n").map(l => "- " + l).join("\n") + "\n" : ""}${historyNote ? historyNote + "\n" : ""}- Current plan:
 ${planSummary}
 
 CRITICAL SCHEDULING RULES — follow these without exception:
