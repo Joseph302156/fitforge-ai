@@ -237,7 +237,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   }
 }
 
-export async function saveUserProfile(userId: string, profile: UserProfile): Promise<void> {
+export async function saveUserProfile(userId: string, profile: UserProfile): Promise<boolean> {
   const { error } = await supabase
     .from("user_profiles")
     .upsert({
@@ -253,7 +253,11 @@ export async function saveUserProfile(userId: string, profile: UserProfile): Pro
       ai_notes: profile.aiNotes,
       updated_at: new Date().toISOString(),
     }, { onConflict: "user_id" })
-  if (error) console.error("saveUserProfile error:", error)
+  if (error) {
+    console.error("saveUserProfile error:", error)
+    return false
+  }
+  return true
 }
 
 // ── Nutrition Goals ───────────────────────────────────────────────────────────

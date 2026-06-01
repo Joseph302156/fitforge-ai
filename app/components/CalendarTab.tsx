@@ -1,10 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useSession } from "@/hooks/useSession";
-import { getWorkoutLogs, getWorkoutPlan } from "@/lib/supabase";
+import { getWorkoutLogs, getWorkoutPlan, getNutritionLogs } from "@/lib/supabase";
 
 type LogEntry = { dayName: string; duration: string; exerciseCount: number; timeElapsed: number; startTime?: string | null; endTime?: string | null };
 type PlanDay = { day: string; type: string; name: string; duration?: string };
+type Meal = { id:string; name:string; calories:number; protein:number; carbs:number; fat:number };
+type NutritionEntry = { meals: Meal[] };
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DOT_COLORS: Record<string,string> = { Monday:"#4f46e5",Tuesday:"#16a34a",Wednesday:"#ea580c",Thursday:"#9333ea",Friday:"#e11d48",Saturday:"#0284c7",Sunday:"#78716c" };
@@ -33,12 +35,19 @@ export default function CalendarTab({ workoutLog: propLog, isDesktop }: { workou
   const [selected,setSelected]=useState<string|null>(todayStr);
   const [schedMap,setSchedMap]=useState<Record<string,{name:string;dayName:string}>>({});
   const [fullLog,setFullLog]=useState<Record<string,LogEntry>>(propLog);
+  const [nutritionLog,setNutritionLog]=useState<Record<string,NutritionEntry>>({});
 
   useEffect(()=>{
     if(!userId)return;
     async function load(){
-      const [logs,plan]=await Promise.all([getWorkoutLogs(userId),getWorkoutPlan(userId,getWeekKey(new Date()))]);
+      const [logs,plan,nutLogs]=await Promise.all([
+        getWorkoutLogs(userId),
+        getWorkoutPlan(userId,getWeekKey(new Date())),
+        getNutritionLogs(userId),
+      ]);
       setFullLog(logs);
+      // Nutrition logs come back as { [date]: { meals: Meal[] } }
+      setNutritionLog(nutLogs as Record<string,NutritionEntry>);
       if(!plan)return;
       const days=(plan as any).days as PlanDay[];
       if(!Array.isArray(days))return;
@@ -131,6 +140,8 @@ export default function CalendarTab({ workoutLog: propLog, isDesktop }: { workou
           if(day===null)return <div key={`e-${i}`}/>;
           const s=ds(day);const ct=cellType(day);const{bg,num}=cellStyle(ct);const isSel=selected===s;
           const dotC=fullLog[s]?DOT_COLORS[getDayName(new Date(viewYear,viewMonth,day))]:null;
+          const hasNut=!!(nutritionLog[s]?.meals?.length);
+          const isLight=ct==="today-done"||ct==="today-sched"||ct==="today";
           return (
             <div key={s} onClick={()=>setSelected(isSel?null:s)}
               style={{
@@ -148,11 +159,14 @@ export default function CalendarTab({ workoutLog: propLog, isDesktop }: { workou
                 transition:"border 0.15s",
               }}>
               <span style={{fontSize:"12px",fontWeight:500,color:num,lineHeight:1}}>{day}</span>
+              {/* Workout dot */}
               {ct==="completed"&&dotC&&<div style={{width:"4px",height:"4px",borderRadius:"50%",background:dotC}}/>}
               {ct==="today-done"&&<div style={{width:"4px",height:"4px",borderRadius:"50%",background:"rgba(255,255,255,0.7)"}}/>}
               {ct==="today-sched"&&<div style={{width:"5px",height:"5px",borderRadius:"50%",background:"rgba(255,255,255,0.9)"}}/>}
               {ct==="upcoming"&&<div style={{width:"4px",height:"4px",borderRadius:"50%",background:"#7c3aed",opacity:0.7}}/>}
               {ct==="missed"&&<div style={{width:"4px",height:"4px",borderRadius:"50%",background:"#fca5a5"}}/>}
+              {/* Nutrition dot — orange if meals logged that day */}
+              {hasNut&&<div style={{width:"4px",height:"4px",borderRadius:"50%",background:isLight?"rgba(255,255,255,0.55)":"#f97316"}}/>}
             </div>
           );
         })}
@@ -160,74 +174,144 @@ export default function CalendarTab({ workoutLog: propLog, isDesktop }: { workou
 
       {/* Legend */}
       <div style={{display:"flex",gap:"12px",marginTop:"10px",flexWrap:"wrap"}}>
-        {[{bg:"#eef2ff",border:"#4f46e5",label:"Completed"},{bg:"#f5f3ff",border:"#7c3aed",label:"Upcoming"},{bg:"#fef2f2",border:"#fca5a5",label:"Missed"},{bg:"#f9fafb",border:"#e5e7eb",label:"Rest / none"}].map(item=>(
+        {[
+          {bg:"#eef2ff",border:"#4f46e5",label:"Workout"},
+          {bg:"#f5f3ff",border:"#7c3aed",label:"Upcoming"},
+          {bg:"#fef2f2",border:"#fca5a5",label:"Missed"},
+          {bg:"#f9fafb",border:"#e5e7eb",label:"Rest / none"},
+        ].map(item=>(
           <div key={item.label} style={{display:"flex",alignItems:"center",gap:"5px"}}>
             <div style={{width:"10px",height:"10px",borderRadius:"3px",background:item.bg,border:`1px solid ${item.border}`}}/>
             <span style={{fontSize:"11px",color:"#9ca3af"}}>{item.label}</span>
           </div>
         ))}
+        <div style={{display:"flex",alignItems:"center",gap:"5px"}}>
+          <div style={{width:"6px",height:"6px",borderRadius:"50%",background:"#f97316"}}/>
+          <span style={{fontSize:"11px",color:"#9ca3af"}}>Nutrition logged</span>
+        </div>
       </div>
     </>
   );
 
-  const DetailCard=()=>(
-    <>
-      {selected&&(
-        <div style={{background:"#f9fafb",borderRadius:"10px",padding:"12px 14px",border:"1px solid #f3f4f6"}}>
-          {selEntry&&selBadge?(
-            <>
-              <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>
-                <div style={{width:"34px",height:"34px",borderRadius:"8px",background:selBadge.bg,color:selBadge.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:700,flexShrink:0}}>{selBadge.label}</div>
-                <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#1f2937",margin:0}}>{selEntry.dayName}</p>
-                  <p style={{fontSize:"11px",color:"#9ca3af",margin:"2px 0 0"}}>{MONTH_NAMES[parseInt(selected!.split("-")[1])-1]} {parseInt(selected!.split("-")[2])} · completed</p>
-                </div>
+  const DetailCard=()=>{
+    if(!selected) return null;
+    const selNut=nutritionLog[selected];
+    const nutMeals:Meal[]=selNut?.meals||[];
+    const hasNut=nutMeals.length>0;
+    const nutTotals=nutMeals.reduce((a,m)=>({
+      calories:a.calories+m.calories,protein:a.protein+m.protein,
+      carbs:a.carbs+m.carbs,fat:a.fat+m.fat,
+    }),{calories:0,protein:0,carbs:0,fat:0});
+
+    const NutritionSection=()=>(
+      <div style={{marginTop:"10px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"7px",marginBottom:"8px"}}>
+          <div style={{width:"20px",height:"20px",borderRadius:"5px",background:"#fff7ed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+          </div>
+          <p style={{fontSize:"11px",fontWeight:600,color:"#9ca3af",textTransform:"uppercase",letterSpacing:"0.07em",margin:0}}>Nutrition</p>
+          <p style={{fontSize:"10px",color:"#9ca3af",margin:"0 0 0 auto"}}>{nutMeals.length} meal{nutMeals.length!==1?"s":""}</p>
+        </div>
+        {/* Macro tiles */}
+        <div style={{display:"flex",gap:"6px",marginBottom:"6px"}}>
+          <div style={{flex:1,background:"#eef2ff",borderRadius:"8px",padding:"8px",textAlign:"center"}}>
+            <div style={{fontSize:"14px",fontWeight:500,color:"#4338ca"}}>{nutTotals.calories}</div>
+            <div style={{fontSize:"10px",color:"#6366f1",marginTop:"2px"}}>kcal</div>
+          </div>
+          <div style={{flex:1,background:"#f0fdf4",borderRadius:"8px",padding:"8px",textAlign:"center"}}>
+            <div style={{fontSize:"14px",fontWeight:500,color:"#15803d"}}>{nutTotals.protein}g</div>
+            <div style={{fontSize:"10px",color:"#16a34a",marginTop:"2px"}}>protein</div>
+          </div>
+          <div style={{flex:1,background:"#fff7ed",borderRadius:"8px",padding:"8px",textAlign:"center"}}>
+            <div style={{fontSize:"14px",fontWeight:500,color:"#c2410c"}}>{nutTotals.carbs}g</div>
+            <div style={{fontSize:"10px",color:"#ea580c",marginTop:"2px"}}>carbs</div>
+          </div>
+          <div style={{flex:1,background:"#faf5ff",borderRadius:"8px",padding:"8px",textAlign:"center"}}>
+            <div style={{fontSize:"14px",fontWeight:500,color:"#7e22ce"}}>{nutTotals.fat}g</div>
+            <div style={{fontSize:"10px",color:"#9333ea",marginTop:"2px"}}>fat</div>
+          </div>
+        </div>
+        {/* Meal list */}
+        <div style={{display:"flex",flexDirection:"column",gap:"4px"}}>
+          {nutMeals.map((m,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"white",borderRadius:"7px",padding:"6px 10px",border:"1px solid #f3f4f6"}}>
+              <p style={{fontSize:"11px",color:"#374151",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,marginRight:"8px"}}>{m.name}</p>
+              <p style={{fontSize:"11px",color:"#6b7280",margin:0,flexShrink:0}}>{m.calories} kcal</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    return(
+      <div style={{background:"#f9fafb",borderRadius:"10px",padding:"12px 14px",border:"1px solid #f3f4f6"}}>
+        {/* ── Workout section ── */}
+        {selEntry&&selBadge?(
+          <>
+            <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>
+              <div style={{width:"34px",height:"34px",borderRadius:"8px",background:selBadge.bg,color:selBadge.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:700,flexShrink:0}}>{selBadge.label}</div>
+              <div>
+                <p style={{fontSize:"13px",fontWeight:500,color:"#1f2937",margin:0}}>{selEntry.dayName}</p>
+                <p style={{fontSize:"11px",color:"#9ca3af",margin:"2px 0 0"}}>{MONTH_NAMES[parseInt(selected!.split("-")[1])-1]} {parseInt(selected!.split("-")[2])} · completed</p>
               </div>
-              <div style={{display:"flex",gap:"8px"}}>
-                {[{val:fmtTime(selEntry.timeElapsed),lbl:"Duration"},{val:String(selEntry.exerciseCount),lbl:"Exercises"},{val:"100%",lbl:"Completed"}].map(s=>(
-                  <div key={s.lbl} style={{flex:1,background:"white",border:"1px solid #f3f4f6",borderRadius:"8px",padding:"8px",textAlign:"center"}}>
-                    <div style={{fontSize:"14px",fontWeight:500,color:"#1f2937"}}>{s.val}</div>
-                    <div style={{fontSize:"11px",color:"#9ca3af",marginTop:"2px"}}>{s.lbl}</div>
+            </div>
+            <div style={{display:"flex",gap:"8px"}}>
+              {[{val:fmtTime(selEntry.timeElapsed),lbl:"Duration"},{val:String(selEntry.exerciseCount),lbl:"Exercises"},{val:"100%",lbl:"Completed"}].map(s=>(
+                <div key={s.lbl} style={{flex:1,background:"white",border:"1px solid #f3f4f6",borderRadius:"8px",padding:"8px",textAlign:"center"}}>
+                  <div style={{fontSize:"14px",fontWeight:500,color:"#1f2937"}}>{s.val}</div>
+                  <div style={{fontSize:"11px",color:"#9ca3af",marginTop:"2px"}}>{s.lbl}</div>
+                </div>
+              ))}
+            </div>
+            {(fmtClock(selEntry.startTime)||fmtClock(selEntry.endTime))&&(
+              <div style={{display:"flex",gap:"8px",marginTop:"8px"}}>
+                {fmtClock(selEntry.startTime)&&(
+                  <div style={{flex:1,background:"white",border:"1px solid #f3f4f6",borderRadius:"8px",padding:"8px",textAlign:"center"}}>
+                    <div style={{fontSize:"14px",fontWeight:500,color:"#1f2937"}}>{fmtClock(selEntry.startTime)}</div>
+                    <div style={{fontSize:"11px",color:"#9ca3af",marginTop:"2px"}}>Started</div>
                   </div>
-                ))}
+                )}
+                {fmtClock(selEntry.endTime)&&(
+                  <div style={{flex:1,background:"white",border:"1px solid #f3f4f6",borderRadius:"8px",padding:"8px",textAlign:"center"}}>
+                    <div style={{fontSize:"14px",fontWeight:500,color:"#1f2937"}}>{fmtClock(selEntry.endTime)}</div>
+                    <div style={{fontSize:"11px",color:"#9ca3af",marginTop:"2px"}}>Ended</div>
+                  </div>
+                )}
               </div>
-              {(fmtClock(selEntry.startTime)||fmtClock(selEntry.endTime))&&(
-                <div style={{display:"flex",gap:"8px",marginTop:"8px"}}>
-                  {fmtClock(selEntry.startTime)&&(
-                    <div style={{flex:1,background:"white",border:"1px solid #f3f4f6",borderRadius:"8px",padding:"8px",textAlign:"center"}}>
-                      <div style={{fontSize:"14px",fontWeight:500,color:"#1f2937"}}>{fmtClock(selEntry.startTime)}</div>
-                      <div style={{fontSize:"11px",color:"#9ca3af",marginTop:"2px"}}>Started</div>
-                    </div>
-                  )}
-                  {fmtClock(selEntry.endTime)&&(
-                    <div style={{flex:1,background:"white",border:"1px solid #f3f4f6",borderRadius:"8px",padding:"8px",textAlign:"center"}}>
-                      <div style={{fontSize:"14px",fontWeight:500,color:"#1f2937"}}>{fmtClock(selEntry.endTime)}</div>
-                      <div style={{fontSize:"11px",color:"#9ca3af",marginTop:"2px"}}>Ended</div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          ):(isUpcoming||isTodaySched)&&selSched?(
-            <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-              <div style={{width:"34px",height:"34px",borderRadius:"8px",background:"#f5f3ff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-              <div><p style={{fontSize:"13px",fontWeight:500,color:"#7c3aed",margin:0}}>{selSched.name}</p><p style={{fontSize:"11px",color:"#9ca3af",margin:"2px 0 0"}}>{MONTH_NAMES[parseInt(selected!.split("-")[1])-1]} {parseInt(selected!.split("-")[2])} · {isTodaySched?"scheduled for today":"scheduled"}</p></div>
-            </div>
-          ):isMissed?(
-            <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-              <div style={{width:"34px",height:"34px",borderRadius:"8px",background:"#fef2f2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
-              <div><p style={{fontSize:"13px",fontWeight:500,color:"#dc2626",margin:0}}>Missed workout</p><p style={{fontSize:"11px",color:"#9ca3af",margin:"2px 0 0"}}>{MONTH_NAMES[parseInt(selected!.split("-")[1])-1]} {parseInt(selected!.split("-")[2])} · scheduled but not completed</p></div>
-            </div>
-          ):(
+            )}
+          </>
+        ):(isUpcoming||isTodaySched)&&selSched?(
+          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+            <div style={{width:"34px",height:"34px",borderRadius:"8px",background:"#f5f3ff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <div><p style={{fontSize:"13px",fontWeight:500,color:"#7c3aed",margin:0}}>{selSched.name}</p><p style={{fontSize:"11px",color:"#9ca3af",margin:"2px 0 0"}}>{MONTH_NAMES[parseInt(selected!.split("-")[1])-1]} {parseInt(selected!.split("-")[2])} · {isTodaySched?"scheduled for today":"scheduled"}</p></div>
+          </div>
+        ):isMissed?(
+          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+            <div style={{width:"34px",height:"34px",borderRadius:"8px",background:"#fef2f2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+            <div><p style={{fontSize:"13px",fontWeight:500,color:"#dc2626",margin:0}}>Missed workout</p><p style={{fontSize:"11px",color:"#9ca3af",margin:"2px 0 0"}}>{MONTH_NAMES[parseInt(selected!.split("-")[1])-1]} {parseInt(selected!.split("-")[2])} · scheduled but not completed</p></div>
+          </div>
+        ):(
+          // Only show "rest day" row if there's no nutrition either
+          !hasNut&&(
             <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
               <div style={{width:"34px",height:"34px",borderRadius:"8px",background:"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
               <div><p style={{fontSize:"13px",fontWeight:500,color:"#6b7280",margin:0}}>Rest day</p><p style={{fontSize:"11px",color:"#9ca3af",margin:"2px 0 0"}}>{MONTH_NAMES[parseInt(selected!.split("-")[1])-1]} {parseInt(selected!.split("-")[2])} · no workout scheduled</p></div>
             </div>
-          )}
-        </div>
-      )}
-    </>
-  );
+          )
+        )}
+
+        {/* ── Nutrition section — shown whenever meals were logged ── */}
+        {hasNut&&(
+          <>
+            {(selEntry||(isUpcoming||isTodaySched)||isMissed)&&(
+              <div style={{height:"1px",background:"#e5e7eb",margin:"10px 0"}}/>
+            )}
+            <NutritionSection/>
+          </>
+        )}
+      </div>
+    );
+  };
 
   const StatsRow=()=>(
     <div style={{display:"flex",gap:"8px",marginTop:"10px"}}>
@@ -263,7 +347,7 @@ export default function CalendarTab({ workoutLog: propLog, isDesktop }: { workou
           {selected&&(
             <>
               <div style={{height:"1px",background:"#f3f4f6",margin:"14px 0"}}/>
-              <DetailCard/>
+              {DetailCard()}
             </>
           )}
           <StatsRow/>
@@ -284,7 +368,7 @@ export default function CalendarTab({ workoutLog: propLog, isDesktop }: { workou
         {selected&&(
           <>
             <div style={{height:"1px",background:"#f3f4f6",margin:"12px 0"}}/>
-            <DetailCard/>
+            {DetailCard()}
           </>
         )}
         <StatsRow/>

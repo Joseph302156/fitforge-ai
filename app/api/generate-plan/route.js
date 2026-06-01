@@ -15,7 +15,7 @@ User profile (personalise the plan accordingly):
 
 export async function POST(request) {
   try {
-    const { goal, level, userPrompt, currentDay, pastDays, userProfile } = await request.json();
+    const { goal, level, userPrompt, currentDay, pastDays, userProfile, workoutHistory } = await request.json();
 
     const pastDaysNote = pastDays && pastDays.length > 0
       ? `CRITICAL: The user is building this plan on ${currentDay}. The days ${pastDays.join(", ")} have already passed this week. You MUST set these days to type "rest" — do not schedule any workout on them under any circumstances.`
@@ -23,12 +23,16 @@ export async function POST(request) {
 
     const profileNote = profileContext(userProfile);
 
+    const historyNote = workoutHistory && workoutHistory.length > 0
+      ? `\nExercises this user has done recently (incorporate their favourites and build on them):\n${workoutHistory.join(", ")}`
+      : "";
+
     const message = await client.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1024,
       system: `You are an expert personal trainer. Generate a personalized 7-day workout plan.
 
-${profileNote ? profileNote + "\n\n" : ""}${pastDaysNote}
+${profileNote ? profileNote + "\n" : ""}${historyNote ? historyNote + "\n\n" : ""}${pastDaysNote}
 
 Respond with ONLY valid JSON, no markdown, no extra text:
 {
@@ -36,23 +40,24 @@ Respond with ONLY valid JSON, no markdown, no extra text:
     { "day": "Monday", "type": "rest", "name": "Rest day" },
     { "day": "Tuesday", "type": "workout", "name": "Upper body strength", "duration": "40 min", "exercises": ["Push-ups 3x15"] }
   ],
-  "tip": "Short tip"
+  "tip": "Short personalised tip based on the user's profile and history"
 }
 
 Rules:
 - Return exactly 7 days Monday through Sunday
 - Any day in [${(pastDays || []).join(", ")}] MUST be type "rest" — never "workout"
-- Respect all user restrictions
-- Match difficulty to fitness level`,
+- Honour every restriction in the user's profile notes (injuries, schedule, preferences)
+- Use exercises from their history where they fit — vary them to avoid staleness
+- Scale difficulty to their build, goal, and fitness level`,
       messages: [{
         role: "user",
         content: `Goal: ${goal}
 Fitness level: ${level}
 Today is: ${currentDay}
 Days already passed this week (must be rest): ${pastDays && pastDays.length > 0 ? pastDays.join(", ") : "none"}
-My situation: ${userPrompt || "No additional restrictions."}${profileNote ? "\n\n" + profileNote : ""}
+${userPrompt ? "Additional notes: " + userPrompt + "\n" : ""}${profileNote ? "\n" + profileNote : ""}${historyNote}
 
-Generate my plan. Remember: ${pastDays && pastDays.length > 0 ? pastDays.join(", ") : "no days"} must be rest days.`,
+Generate my personalised plan.`,
       }],
     });
 

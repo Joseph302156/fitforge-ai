@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "@/hooks/useSession";
-import { getWorkoutPlan, saveWorkoutPlan, deleteWorkoutPlan, saveWorkoutLog, getWorkoutLogs, getLastSetData, saveNutritionGoals, UserProfile } from "@/lib/supabase";
+import { getWorkoutPlan, saveWorkoutPlan, deleteWorkoutPlan, saveWorkoutLog, getWorkoutLogs, getLastSetData, saveNutritionGoals, getAllWorkoutLogs, UserProfile } from "@/lib/supabase";
 
 const DAY_COLORS: Record<string, { bg: string; text: string; badge: string; accent: string }> = {
   Monday:    { bg:"#eef2ff", text:"#4338ca", badge:"MON", accent:"#4f46e5" },
@@ -426,7 +426,7 @@ function DayCard({ day, onEdit, onStart, isCompleted, isToday, completedDuration
   return <div onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} onClick={()=>{if(isToday)onStart(day);}} style={{background:"#f9fafb",borderRadius:"12px",border:hovered&&isToday?"1px solid #e5e7eb":"1px solid #f3f4f6",cursor:isToday?"pointer":"default",transition:"border-color 0.15s",opacity:isToday?1:0.75}}><div style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 12px 8px"}}><div style={{width:"36px",height:"36px",borderRadius:"8px",background:c.bg,color:c.text,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:500,flexShrink:0}}>{c.badge}</div><div style={{flex:1,minWidth:0}}><p style={{fontSize:"12px",fontWeight:500,color:"#1f2937",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{day.name}</p><p style={{fontSize:"10px",color:"#9ca3af",margin:"2px 0 0"}}>{day.duration} · {day.exercises?.length} exercises</p>{!isToday&&<p style={{fontSize:"10px",color:"#f59e0b",margin:"2px 0 0"}}>available on {day.day}</p>}</div><div style={{display:"flex",alignItems:"center",gap:"6px"}}><button onClick={e=>{e.stopPropagation();onEdit(day);}} style={{width:"28px",height:"28px",borderRadius:"8px",border:"1px solid #e5e7eb",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:hovered?1:0,transition:"opacity 0.15s",color:"#d1d5db"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>{isToday&&<div style={{width:"28px",height:"28px",display:"flex",alignItems:"center",justifyContent:"center",color:hovered?"#6b7280":"#d1d5db"}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>}</div></div><div style={{borderLeft:"2px solid #e5e7eb",marginLeft:"16px",paddingLeft:"12px",paddingBottom:"12px",display:"flex",flexDirection:"column",gap:"4px"}}>{day.exercises?.map((ex,i)=><p key={i} style={{fontSize:"10px",color:"#6b7280",margin:0}}>{ex}</p>)}</div></div>;
 }
 
-function ChatBox({ plan, goal, level, currentDay, pastDays, userPrompt, userProfile, onPlanUpdate }: { plan:Plan; goal:string; level:string; currentDay:string; pastDays:string[]; userPrompt:string; userProfile?:UserProfile; onPlanUpdate:(p:Plan)=>void }) {
+function ChatBox({ plan, goal, level, currentDay, pastDays, userPrompt, userProfile, workoutHistoryRef, onPlanUpdate }: { plan:Plan; goal:string; level:string; currentDay:string; pastDays:string[]; userPrompt:string; userProfile?:UserProfile; workoutHistoryRef?:React.RefObject<string[]>; onPlanUpdate:(p:Plan)=>void }) {
   const [msgs,setMsgs]=useState([{role:"assistant",text:"Hey! I'm your AI trainer. Ask me anything about your plan.",updated:false}]);
   const [input,setInput]=useState("");const [loading,setLoading]=useState(false);const [open,setOpen]=useState(false);
   const bottomRef=useRef<HTMLDivElement>(null);
@@ -436,7 +436,7 @@ function ChatBox({ plan, goal, level, currentDay, pastDays, userPrompt, userProf
     setInput("");setLoading(true);
     const next=[...msgs,{role:"user",text:t,updated:false}];setMsgs(next);
     const summary=plan.days.map(d=>d.type==="rest"?`${d.day}: Rest`:`${d.day}: ${d.name} (${d.duration}) — ${d.exercises?.join(", ")}`).join("\n");
-    try{const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,planSummary:summary,currentDay,pastDays,userPrompt,userProfile:userProfile??null,messages:next.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.text}))})});const data=await res.json();if(data.updatedPlan){onPlanUpdate(data.updatedPlan);setMsgs(p=>[...p,{role:"assistant",text:data.message||"Plan updated!",updated:true}]);}else setMsgs(p=>[...p,{role:"assistant",text:data.message||"Let me know if you need changes!",updated:false}]);}
+    try{const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,planSummary:summary,currentDay,pastDays,userPrompt,userProfile:userProfile??null,workoutHistory:workoutHistoryRef?.current??[],messages:next.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.text}))})});const data=await res.json();if(data.updatedPlan){onPlanUpdate(data.updatedPlan);setMsgs(p=>[...p,{role:"assistant",text:data.message||"Plan updated!",updated:true}]);}else setMsgs(p=>[...p,{role:"assistant",text:data.message||"Let me know if you need changes!",updated:false}]);}
     catch{setMsgs(p=>[...p,{role:"assistant",text:"Sorry, something went wrong.",updated:false}]);}
     finally{setLoading(false);}
   }
@@ -465,9 +465,11 @@ function ChatBox({ plan, goal, level, currentDay, pastDays, userPrompt, userProf
 export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesktop, userProfile }: { onWorkoutComplete:(n:string,d:string,c:number,s:number)=>void; onNutritionGoals?:(g:NutritionGoals)=>void; isDesktop?: boolean; userProfile?: UserProfile }) {
   const { data: session } = useSession();
   const userId = session?.user?.id||session?.user?.email||"";
-  const [goal,setGoal]=useState("Lose weight");
-  const [level,setLevel]=useState("Beginner");
-  const [prompt,setPrompt]=useState("");
+
+  // goal/level are derived from the user's profile but kept as internal state
+  // so ChatBox and the AI chat can still reference them
+  const [goal,setGoal]=useState("Stay fit");
+  const [level]=useState("Intermediate");
   const [plan,setPlan]=useState<Plan|null>(null);
   const [workoutLog,setWorkoutLog]=useState<Record<string,{dayName:string;timeElapsed:number}>>({});
   const [mounted,setMounted]=useState(false);
@@ -477,6 +479,7 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
   const [sessionDay,setSessionDay]=useState<Day|null>(null);
   const [sessionMinimized,setSessionMinimized]=useState(false);
   const [toast,setToast]=useState("");
+  const historyRef=useRef<string[]>([]);
 
   const today=new Date();
   const todayStr=localDateStr(today);
@@ -486,59 +489,143 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
   const pastDays=daysOfWeek.slice(0,currentDayIndex);
   const weekKey=getWeekKey();
 
+  // Keep goal in sync with profile so nutrition & chat stay accurate
+  useEffect(()=>{
+    if(!userProfile)return;
+    const g=userProfile.fitnessGoal;
+    if(g.includes("fat")||g.includes("lean"))setGoal("Lose weight");
+    else if(g.includes("muscle")||g.includes("bigger"))setGoal("Build muscle");
+    else setGoal("Stay fit");
+  },[userProfile?.fitnessGoal]);
+
+  // On mount: load saved plan + logs + workout history, auto-generate if no plan
   useEffect(()=>{
     if(!userId)return;
     async function load(){
-      const [savedPlan,logs]=await Promise.all([getWorkoutPlan(userId,weekKey),getWorkoutLogs(userId)]);
-      if(savedPlan)setPlan(savedPlan as Plan);
+      const [savedPlan,logs,allLogs]=await Promise.all([
+        getWorkoutPlan(userId,weekKey),
+        getWorkoutLogs(userId),
+        getAllWorkoutLogs(userId),
+      ]);
+
+      // Build exercise frequency map from last ~16 sessions (~4 weeks)
+      const recent=allLogs.slice(-16);
+      const freq:Record<string,number>={};
+      recent.forEach(log=>{
+        if(!log.setData)return;
+        Object.keys(log.setData).forEach(ex=>{
+          const clean=ex.replace(/\s*\d+\s*[xX×]\s*\d+.*$/,"").trim();
+          freq[clean]=(freq[clean]||0)+1;
+        });
+      });
+      historyRef.current=Object.entries(freq).sort(([,a],[,b])=>b-a).slice(0,14).map(([n])=>n);
+
+      // Populate workout log
       const simpleLogs:Record<string,{dayName:string;timeElapsed:number}>={};
       Object.entries(logs).forEach(([date,entry])=>{simpleLogs[date]={dayName:entry.dayName,timeElapsed:entry.timeElapsed||0};});
-      setWorkoutLog(simpleLogs);setMounted(true);
+      setWorkoutLog(simpleLogs);
+
+      if(savedPlan){
+        setPlan(savedPlan as Plan);
+        setMounted(true);
+      } else {
+        // No plan this week — auto-generate immediately
+        setMounted(true);
+        setLoading(true);
+        setError("");
+        try{
+          const res=await fetch("/api/generate-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+            goal,level,userPrompt:"",currentDay:currentDayName,pastDays,
+            userProfile:userProfile??null,
+            workoutHistory:historyRef.current,
+          })});
+          const data=await res.json();
+          if(data.error)throw new Error(data.error);
+          setPlan(data);
+          await saveWorkoutPlan(userId,weekKey,data);
+          const ng=computeNutritionGoals(goal,level,data);
+          await saveNutritionGoals(userId,ng);
+          onNutritionGoals?.(ng);
+        }catch{setError("Couldn't build your plan. Tap retry below.");}
+        finally{setLoading(false);}
+      }
     }
     load();
   },[userId]);
 
   function showToast(msg:string){setToast(msg);setTimeout(()=>setToast(""),2500);}
   async function updatePlan(p:Plan){setPlan(p);await saveWorkoutPlan(userId,weekKey,p);}
-  async function generate(){
+
+  // Manual regenerate (called from "Regenerate" button or after error)
+  async function regenerate(){
     setLoading(true);setError("");setPlan(null);
     try{
-      const res=await fetch("/api/generate-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,level,userPrompt:prompt,currentDay:currentDayName,pastDays,userProfile:userProfile??null})});
+      const res=await fetch("/api/generate-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        goal,level,userPrompt:"",currentDay:currentDayName,pastDays,
+        userProfile:userProfile??null,
+        workoutHistory:historyRef.current,
+      })});
       const data=await res.json();
       if(data.error)throw new Error(data.error);
       await updatePlan(data);
       const ng=computeNutritionGoals(goal,level,data);
       await saveNutritionGoals(userId,ng);
       onNutritionGoals?.(ng);
-    }
-    catch{setError("Something went wrong. Please try again.");}
+    }catch{setError("Couldn't build your plan. Try again.");}
     finally{setLoading(false);}
   }
+
   async function handleWorkoutComplete(n:string,d:string,c:number,s:number,setData:Record<string,Array<{v1:string;v2:string}>>,startTime:Date|null,endTime:Date){
     const updated={...workoutLog,[todayStr]:{dayName:n,timeElapsed:s}};setWorkoutLog(updated);
     await saveWorkoutLog(userId,todayStr,n,d,c,s,setData,startTime?.toISOString(),endTime.toISOString());
     onWorkoutComplete(n,d,c,s);closeSession();showToast("Workout logged!");
   }
   function closeSession(){setSessionDay(null);setSessionMinimized(false);}
-  async function startOver(){await deleteWorkoutPlan(userId,weekKey);setPlan(null);setError("");setPrompt("");}
 
-  if(!mounted)return<><div style={{background:"#1a1a2e",padding:"20px"}}><h1 style={{color:"white",fontSize:"18px",fontWeight:500,margin:0}}>Build your week</h1><p style={{color:"rgba(255,255,255,0.4)",fontSize:"12px",margin:"4px 0 0"}}>Loading...</p></div><div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"64px 0"}}><div style={{width:"24px",height:"24px",borderRadius:"50%",border:"2px solid #e5e7eb",borderTopColor:"#6366f1",animation:"spin 0.8s linear infinite"}}/></div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></>;
-
-  const buildContent=(
+  // ── Pre-mount skeleton ───────────────────────────────────────────────────────
+  if(!mounted)return(
     <>
-      <p style={{fontSize:"12px",color:"#9ca3af",fontWeight:500,marginBottom:"8px"}}>Your goal</p>
-      <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:"16px"}}>{["Lose weight","Build muscle","Stay fit"].map(g=><button key={g} onClick={()=>setGoal(g)} style={{fontSize:"12px",padding:"6px 14px",borderRadius:"99px",border:`1px solid ${goal===g?"#1a1a2e":"#e5e7eb"}`,background:goal===g?"#1a1a2e":"transparent",color:goal===g?"white":"#6b7280",cursor:"pointer"}}>{g}</button>)}</div>
-      <p style={{fontSize:"12px",color:"#9ca3af",fontWeight:500,marginBottom:"8px"}}>Fitness level</p>
-      <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:"20px"}}>{["Beginner","Intermediate","Advanced"].map(l=><button key={l} onClick={()=>setLevel(l)} style={{fontSize:"12px",padding:"6px 14px",borderRadius:"99px",border:`1px solid ${level===l?"#1a1a2e":"#e5e7eb"}`,background:level===l?"#1a1a2e":"transparent",color:level===l?"white":"#6b7280",cursor:"pointer"}}>{l}</button>)}</div>
-      <hr style={{border:"none",borderTop:"1px solid #f3f4f6",marginBottom:"20px"}}/>
-      <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"}}><p style={{fontSize:"12px",fontWeight:500,color:"#374151",margin:0}}>Tell the AI your situation</p><span style={{fontSize:"10px",background:"#eef2ff",color:"#4f46e5",padding:"2px 8px",borderRadius:"99px",fontWeight:500}}>AI</span></div>
-      <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} rows={4} placeholder="e.g. I have a bad knee so no running..." style={{width:"100%",fontSize:"12px",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"12px",color:"#374151",background:"#f9fafb",resize:"none",outline:"none",lineHeight:1.6,boxSizing:"border-box"}}/>
-      <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginTop:"8px",marginBottom:"20px"}}>{HINTS.map(h=><button key={h} onClick={()=>setPrompt(p=>p.trim()?p.trimEnd()+". "+h:h)} style={{fontSize:"10px",padding:"4px 10px",borderRadius:"6px",background:"#f9fafb",border:"1px solid #e5e7eb",color:"#9ca3af",cursor:"pointer"}}>{h}</button>)}</div>
-      <button onClick={generate} style={{width:"100%",background:"#4f46e5",color:"white",border:"none",borderRadius:"12px",padding:"12px",fontSize:"14px",fontWeight:500,cursor:"pointer"}}>Generate my weekly plan →</button>
-      {error&&<div style={{marginTop:"12px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"12px",padding:"12px",fontSize:"12px",color:"#dc2626"}}>{error}</div>}
+      <div style={{background:"#1a1a2e",padding:"20px"}}>
+        <h1 style={{color:"white",fontSize:"18px",fontWeight:500,margin:0}}>Your weekly plan</h1>
+        <p style={{color:"rgba(255,255,255,0.4)",fontSize:"12px",margin:"4px 0 0"}}>Loading…</p>
+      </div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"64px 0"}}>
+        <div style={{width:"24px",height:"24px",borderRadius:"50%",border:"2px solid #e5e7eb",borderTopColor:"#6366f1",animation:"spin 0.8s linear infinite"}}/>
+      </div>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </>
   );
 
+  // ── Auto-building screen ─────────────────────────────────────────────────────
+  const buildingContent=(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"56px 20px 32px",textAlign:"center",gap:"16px"}}>
+      <div style={{width:"54px",height:"54px",borderRadius:"16px",background:"#eef2ff",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+        </svg>
+      </div>
+      <div>
+        <p style={{fontSize:"15px",fontWeight:500,color:"#1f2937",margin:"0 0 8px"}}>Building your week…</p>
+        <p style={{fontSize:"12px",color:"#9ca3af",lineHeight:1.7,margin:0}}>
+          Your AI coach is crafting a personalized plan<br/>
+          {historyRef.current.length>0?"based on your profile and past workouts.":"based on your profile and goals."}
+        </p>
+      </div>
+      <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
+        {[0,0.2,0.4].map((d,i)=><div key={i} style={{width:"7px",height:"7px",borderRadius:"50%",background:"#a5b4fc",animation:`bounce 1.1s infinite ${d}s`}}/>)}
+      </div>
+    </div>
+  );
+
+  // ── Error screen ─────────────────────────────────────────────────────────────
+  const errorContent=(
+    <div style={{textAlign:"center",padding:"40px 20px"}}>
+      <p style={{fontSize:"13px",color:"#dc2626",marginBottom:"12px"}}>{error}</p>
+      <button onClick={regenerate} style={{background:"#4f46e5",color:"white",border:"none",borderRadius:"12px",padding:"10px 20px",fontSize:"13px",fontWeight:500,cursor:"pointer"}}>Try again</button>
+    </div>
+  );
+
+  // ── Plan content ─────────────────────────────────────────────────────────────
   const planContent=(
     <>
       {toast&&<div style={{marginBottom:"12px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:"12px",padding:"10px 16px",fontSize:"12px",color:"#16a34a",textAlign:"center",fontWeight:500}}>{toast}</div>}
@@ -555,23 +642,28 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
           return <DayCard key={day.day} day={day} onEdit={d=>setEditDay(d)} onStart={d=>setSessionDay(d)} isCompleted={isComp} isToday={isToday} completedDuration={elapsed?fmtSecs(elapsed):undefined}/>;
         })}
       </div>
-      <ChatBox plan={plan!} goal={goal} level={level} currentDay={currentDayName} pastDays={pastDays} userPrompt={prompt} userProfile={userProfile} onPlanUpdate={p=>{updatePlan(p);showToast("Plan updated!");}}/>
-      <button onClick={startOver} style={{width:"100%",marginTop:"12px",background:"transparent",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"10px",fontSize:"12px",color:"#9ca3af",cursor:"pointer"}}>← Start over</button>
+      <ChatBox plan={plan!} goal={goal} level={level} currentDay={currentDayName} pastDays={pastDays} userPrompt="" userProfile={userProfile} workoutHistoryRef={historyRef} onPlanUpdate={p=>{updatePlan(p);showToast("Plan updated!");}}/>
+      <button onClick={regenerate} style={{width:"100%",marginTop:"12px",background:"transparent",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"10px",fontSize:"12px",color:"#9ca3af",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Regenerate this week&apos;s plan
+      </button>
     </>
   );
 
-  const header=(title:string,sub:string)=>(
+  // ── Header ───────────────────────────────────────────────────────────────────
+  const profileSub=userProfile
+    ?`${userProfile.fitnessGoal} · ${userProfile.build}`
+    :"Personalized by AI";
+  const header=(
     <div style={{background:"#1a1a2e",padding:isDesktop?"24px 28px 20px":"20px",flexShrink:0}}>
-      <h1 style={{color:"white",fontSize:isDesktop?"22px":"18px",fontWeight:500,margin:"0 0 4px"}}>{title}</h1>
-      <p style={{color:"rgba(255,255,255,0.4)",fontSize:"12px",margin:0}}>{sub}</p>
+      <h1 style={{color:"white",fontSize:isDesktop?"22px":"18px",fontWeight:500,margin:"0 0 4px"}}>Your weekly plan</h1>
+      <p style={{color:"rgba(255,255,255,0.4)",fontSize:"12px",margin:0}}>{loading?"Building your personalized plan…":profileSub}</p>
     </div>
   );
 
-  const loadingSpinner=(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"64px 0",gap:"16px"}}><div style={{width:"32px",height:"32px",borderRadius:"50%",border:"2px solid #e5e7eb",borderTopColor:"#6366f1",animation:"spin 0.8s linear infinite"}}/><p style={{fontSize:"12px",color:"#9ca3af"}}>Building your personalized plan...</p></div>);
+  const mainContent=loading?buildingContent:error?errorContent:plan?planContent:buildingContent;
 
-  // Floating pill shown while a workout is minimized.
-  // Portaled to document.body so it stays visible even when WorkoutTab's
-  // parent container is hidden via display:none (e.g. user on another tab).
+  // ── Resume pill ──────────────────────────────────────────────────────────────
   const resumePill = sessionDay&&sessionMinimized
     ? createPortal(
         <div style={{position:"fixed",bottom:"76px",left:"50%",transform:"translateX(-50%)",zIndex:9999,display:"flex",alignItems:"center",gap:"10px",background:"#1a1a2e",borderRadius:"20px",padding:"10px 14px 10px 12px",boxShadow:"0 4px 24px rgba(0,0,0,0.3)",whiteSpace:"nowrap"}}>
@@ -586,27 +678,29 @@ export default function WorkoutTab({ onWorkoutComplete, onNutritionGoals, isDesk
       )
     : null;
 
+  const kf=`@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}} @keyframes popIn{0%{transform:scale(0.6);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`;
+
   if(isDesktop){return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
-      {header(plan?"Your weekly plan":"Build your week",plan?`${goal} · ${level} · tap today's workout to start`:"Powered by AI — just describe your situation")}
+      {header}
       <div style={{flex:1,overflowY:"auto",padding:"32px 48px"}}>
-        <div style={{maxWidth:"1000px",margin:"0 auto"}}>{loading?loadingSpinner:plan?planContent:buildContent}</div>
+        <div style={{maxWidth:"1000px",margin:"0 auto"}}>{mainContent}</div>
       </div>
       {editDay&&<EditModal day={editDay} onSave={d=>{updatePlan({...plan!,days:plan!.days.map(x=>x.day===d.day?d:x)});setEditDay(null);showToast("Day updated!");}} onClose={()=>setEditDay(null)}/>}
       {sessionDay&&<WorkoutSession day={sessionDay} userId={userId} goal={goal} minimized={sessionMinimized} onClose={closeSession} onMinimize={()=>setSessionMinimized(true)} onDone={handleWorkoutComplete}/>}
       {resumePill}
-      <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}} @keyframes popIn{0%{transform:scale(0.6);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
+      <style>{kf}</style>
     </div>
   );}
 
   return(
     <>
-      {header(plan?"Your weekly plan":"Build your week",plan?`${goal} · ${level} · tap today's workout to start`:"Powered by AI — just describe your situation")}
-      <div style={{padding:"20px"}}>{loading?loadingSpinner:plan?planContent:buildContent}</div>
+      {header}
+      <div style={{padding:"20px"}}>{mainContent}</div>
       {editDay&&<EditModal day={editDay} onSave={d=>{updatePlan({...plan!,days:plan!.days.map(x=>x.day===d.day?d:x)});setEditDay(null);showToast("Day updated!");}} onClose={()=>setEditDay(null)}/>}
       {sessionDay&&<WorkoutSession day={sessionDay} userId={userId} goal={goal} minimized={sessionMinimized} onClose={closeSession} onMinimize={()=>setSessionMinimized(true)} onDone={handleWorkoutComplete}/>}
       {resumePill}
-      <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}} @keyframes popIn{0%{transform:scale(0.6);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
+      <style>{kf}</style>
     </>
   );
 }

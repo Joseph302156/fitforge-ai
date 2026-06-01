@@ -86,15 +86,42 @@ export default function AppPage() {
   useEffect(() => {
     if (status !== "authenticated" || !session?.user) return;
     const uid = session.user.id || session.user.email || "";
+    const lsKey = `fitforge_profile_${uid}`;
+
     getUserProfile(uid).then(p => {
-      setUserProfile(p);
+      if (p) {
+        // Supabase has the profile — use it and keep localStorage in sync
+        setUserProfile(p);
+        try { localStorage.setItem(lsKey, JSON.stringify(p)); } catch { /* ignore */ }
+      } else {
+        // Supabase returned nothing (table may not exist yet, or first-ever load).
+        // Fall back to localStorage so the onboarding doesn't re-appear.
+        try {
+          const raw = localStorage.getItem(lsKey);
+          if (raw) {
+            const cached: UserProfile = JSON.parse(raw);
+            setUserProfile(cached);
+            // Silently try to back-fill Supabase in the background
+            saveUserProfile(uid, cached);
+          }
+        } catch { /* ignore */ }
+      }
       setProfileLoaded(true);
     });
   }, [status, session?.user?.id]);
 
   async function handleOnboardingComplete(p: UserProfile) {
     const uid = session?.user?.id || session?.user?.email || "";
+    const lsKey = `fitforge_profile_${uid}`;
+
+    // 1. Write to localStorage immediately — this is instant and never fails,
+    //    so the questionnaire will never be shown again even if Supabase is down.
+    try { localStorage.setItem(lsKey, JSON.stringify(p)); } catch { /* ignore */ }
+
+    // 2. Persist to Supabase (requires the user_profiles table to exist — see SQL below).
+    //    Failure is non-fatal; localStorage already covers us.
     await saveUserProfile(uid, p);
+
     setUserProfile(p);
   }
 
