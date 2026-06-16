@@ -27,7 +27,7 @@ When giving the opening daily summary (first message), naturally mention:
 Keep it conversational and warm, like a coach who actually knows them.`;
 
     const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 500,
       system: systemPrompt,
       messages: messages.map((m) => ({

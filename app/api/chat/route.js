@@ -67,7 +67,7 @@ Always respond with valid JSON only. No markdown. No extra text outside the JSON
 
     // Server-side safety net: force past days to rest in any updatedPlan returned
     const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       system,
       messages: messages.map(m => ({

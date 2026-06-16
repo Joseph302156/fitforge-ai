@@ -13,7 +13,7 @@ export async function getWorkoutPlan(userId: string, weekKey: string) {
     .select("plan")
     .eq("user_id", userId)
     .eq("week_key", weekKey)
-    .single()
+    .maybeSingle()
   if (error || !data) return null
   return data.plan
 }
@@ -222,7 +222,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     .from("user_profiles")
     .select("gender, height_ft, height_in, weight_lbs, body_fat_pct, build, fitness_goal, target_physique, ai_notes")
     .eq("user_id", userId)
-    .single()
+    .maybeSingle()
   if (error || !data) return null
   return {
     gender: data.gender ?? "",
@@ -267,7 +267,7 @@ export async function getNutritionGoals(userId: string) {
     .from("nutrition_goals")
     .select("calories, protein, carbs, fat")
     .eq("user_id", userId)
-    .single()
+    .maybeSingle()
   if (error || !data) return null
   return data
 }

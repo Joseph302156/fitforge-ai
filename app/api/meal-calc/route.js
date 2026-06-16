@@ -7,7 +7,7 @@ export async function POST(request) {
     const { messages } = await request.json();
 
     const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       system: `You are a nutrition expert AI assistant. The user will describe a meal or food they ate and you will estimate the nutritional content.
 
