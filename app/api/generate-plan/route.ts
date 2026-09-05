@@ -1,10 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { enforcePastDaysRest } from "@/lib/planSafety";
 import { parsePlanJson } from "@/lib/planSchema";
+import { getFirstText } from "@/lib/aiTypes";
+import type { UserProfile } from "@/lib/supabase";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-function profileContext(p) {
+function profileContext(p: UserProfile | null | undefined) {
   if (!p) return "";
   const bf = p.bodyFatPct ? ` / ~${p.bodyFatPct}% body fat` : "";
   return `
@@ -15,9 +17,19 @@ User profile (personalise the plan accordingly):
 - Additional context from user: ${p.aiNotes || "None provided"}`.trim();
 }
 
-export async function POST(request) {
+type GeneratePlanRequest = {
+  goal: string;
+  level: string;
+  userPrompt: string;
+  currentDay: string;
+  pastDays: string[];
+  userProfile: UserProfile | null;
+  workoutHistory: string[];
+};
+
+export async function POST(request: Request) {
   try {
-    const { goal, level, userPrompt, currentDay, pastDays, userProfile, workoutHistory } = await request.json();
+    const { goal, level, userPrompt, currentDay, pastDays, userProfile, workoutHistory } = (await request.json()) as GeneratePlanRequest;
 
     const pastDaysNote = pastDays && pastDays.length > 0
       ? `CRITICAL: The user is building this plan on ${currentDay}. The days ${pastDays.join(", ")} have already passed this week. You MUST set these days to type "rest" — do not schedule any workout on them under any circumstances.`
@@ -63,7 +75,7 @@ Generate my personalised plan.`,
       }],
     });
 
-    const raw = message.content[0].text;
+    const raw = getFirstText(message.content);
     const plan = parsePlanJson(raw);
 
     // Safety net: force past days to rest on the server side

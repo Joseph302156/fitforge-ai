@@ -1,10 +1,16 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { ChatMessage } from "@/lib/aiTypes";
+import { getFirstText } from "@/lib/aiTypes";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-export async function POST(request) {
+type MealCalcRequest = {
+  messages: ChatMessage[];
+};
+
+export async function POST(request: Request) {
   try {
-    const { messages } = await request.json();
+    const { messages } = (await request.json()) as MealCalcRequest;
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
@@ -42,7 +48,7 @@ Rules for estimates:
       })),
     });
 
-    const raw = response.content[0].text;
+    const raw = getFirstText(response.content);
     const clean = raw.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean);
     return Response.json(parsed);

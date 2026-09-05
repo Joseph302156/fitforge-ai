@@ -1,8 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { enforcePastDaysRest } from "@/lib/planSafety";
+import { WorkoutPlanSchema, type WorkoutPlan } from "@/lib/planSchema";
+import type { ChatMessage } from "@/lib/aiTypes";
+import { getFirstText } from "@/lib/aiTypes";
+import type { UserProfile } from "@/lib/supabase";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-function profileContext(p) {
+function profileContext(p: UserProfile | null | undefined) {
   if (!p) return "";
   const bf = p.bodyFatPct ? ` / ~${p.bodyFatPct}% body fat` : "";
   return `User profile:
@@ -12,9 +17,26 @@ function profileContext(p) {
 - Notes: ${p.aiNotes || "None"}`;
 }
 
-export async function POST(request) {
+type ChatRequest = {
+  goal: string;
+  level: string;
+  planSummary: string;
+  currentDay: string;
+  pastDays: string[];
+  userPrompt: string;
+  userProfile: UserProfile | null;
+  workoutHistory: string[];
+  messages: ChatMessage[];
+};
+
+type ChatResponse = {
+  message: string;
+  updatedPlan?: WorkoutPlan;
+};
+
+export async function POST(request: Request) {
   try {
-    const { goal, level, planSummary, currentDay, pastDays, userPrompt, userProfile, workoutHistory, messages } = await request.json();
+    const { goal, level, planSummary, currentDay, pastDays, userPrompt, userProfile, workoutHistory, messages } = (await request.json()) as ChatRequest;
 
     const daysOfWeek = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
     const currentDayIndex = daysOfWeek.indexOf(currentDay);
@@ -76,17 +98,18 @@ Always respond with valid JSON only. No markdown. No extra text outside the JSON
       })),
     });
 
-    const raw = response.content[0].text;
+    const raw = getFirstText(response.content);
     const clean = raw.replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(clean);
+    const parsed = JSON.parse(clean) as ChatResponse;
 
     // Enforce past days as rest regardless of what the AI returned
     if (parsed.updatedPlan && lockedDays.length > 0) {
-      parsed.updatedPlan.days = parsed.updatedPlan.days.map(d =>
-        lockedDays.includes(d.day)
-          ? { day: d.day, type: "rest", name: "Rest day" }
-          : d
-      );
+      const valid = WorkoutPlanSchema.safeParse(parsed.updatedPlan);
+      if (valid.success) {
+        parsed.updatedPlan = enforcePastDaysRest(valid.data, lockedDays);
+      } else {
+        delete parsed.updatedPlan;
+      }
     }
 
     return Response.json(parsed);
