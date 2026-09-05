@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { enforcePastDaysRest, type WorkoutPlan } from "./planSafety";
+import { enforcePastDaysRest } from "./planSafety";
+import type { WorkoutPlan } from "./planSchema";
 
 function makePlan(): WorkoutPlan {
   return {
