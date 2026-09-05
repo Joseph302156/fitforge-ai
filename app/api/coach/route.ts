@@ -1,10 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { ChatMessage } from "@/lib/aiTypes";
+import { getFirstText } from "@/lib/aiTypes";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-export async function POST(request) {
+type CoachRequest = {
+  messages: ChatMessage[];
+  context: string;
+};
+
+export async function POST(request: Request) {
   try {
-    const { messages, context } = await request.json();
+    const { messages, context } = (await request.json()) as CoachRequest;
 
     const systemPrompt = `You are FitForge AI, a friendly and knowledgeable personal fitness coach. You have full context about the user's current fitness situation and give personalized, actionable advice.
 
@@ -36,7 +43,7 @@ Keep it conversational and warm, like a coach who actually knows them.`;
       })),
     });
 
-    return Response.json({ message: response.content[0].text });
+    return Response.json({ message: getFirstText(response.content) });
   } catch (error) {
     console.error("Coach API error:", error);
     return Response.json({
