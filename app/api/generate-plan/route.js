@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { enforcePastDaysRest } from "@/lib/planSafety";
+import { parsePlanJson } from "@/lib/planSchema";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -63,8 +64,7 @@ Generate my personalised plan.`,
     });
 
     const raw = message.content[0].text;
-    const clean = raw.replace(/```json|```/g, "").trim();
-    const plan = JSON.parse(clean);
+    const plan = parsePlanJson(raw);
 
     // Safety net: force past days to rest on the server side
     const safePlan = enforcePastDaysRest(plan, pastDays);

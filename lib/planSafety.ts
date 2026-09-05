@@ -1,15 +1,4 @@
-export type PlanDay = {
-  day: string;
-  type: string;
-  name: string;
-  duration?: string;
-  exercises?: string[];
-};
-
-export type WorkoutPlan = {
-  days: PlanDay[];
-  tip?: string;
-};
+import type { WorkoutPlan } from "./planSchema";
 
 // Safety net: force already-passed days of the week to rest, even if the
 // AI scheduled workouts on them. Past days are in the past — the user
